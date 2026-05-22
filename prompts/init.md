@@ -14,7 +14,7 @@ Set up Harness Bridge in this repo.
    - Gemini CLI → `GEMINI.md` at repo root
    - Cursor → create `.cursor/rules/harness-bridge.md` (new file; no append needed)
 
-   The snippet is the block between `--- begin snippet ---` and `--- end snippet ---` in this repo's `prompts/maintainer.md` (or in the Harness Bridge project at <https://github.com/...> if you don't have it locally).
+   The snippet is the block between `--- begin snippet ---` and `--- end snippet ---` in this repo's `prompts/maintainer.md` (or in the Harness Bridge project at <https://github.com/codemeall/harness-bridge.git> if you don't have it locally).
 
    **Do not overwrite existing content.** Append as a new section. The canonical section header is `## Harness Bridge — keep .harness/bridge.md current`.
 

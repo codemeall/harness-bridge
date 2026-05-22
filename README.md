@@ -6,7 +6,9 @@
 
 **The fix.** The agent maintains a tiny markdown file at `.harness/bridge.md` while it works. When any session ends, a new session — same provider or different — reads that file, grounds itself in your repo's git state, restates what's going on, waits for your confirmation, and continues exactly where the previous one left off.
 
-**What you install.** No software. No CLI. No MCP server. A markdown schema, six prompts, and a snippet appended to your provider's existing config file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/`).
+**What you install.** No software. No CLI. No MCP server. A markdown schema, seven prompts, and a snippet appended to your provider's existing config file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/`).
+
+**Companion workflow — the LLM Wiki.** Harness Bridge is paired with [`prompts/vault-init.md`](./prompts/vault-init.md), a separate one-shot prompt that bootstraps a personal **LLM Wiki** — a markdown-based knowledge base maintained entirely by an AI agent. Use the vault to capture design rationale, decisions, and research; use the bridge file in each project repo to track in-flight work. Together they form a complete AI development workflow: vault for the *why*, project for the *what*, bridge for the *current work*. See [Companion: LLM Wiki](#companion-llm-wiki) below.
 
 ---
 
@@ -17,6 +19,7 @@
 - [Install](#install)
 - [Use it](#use-it)
 - [Common scenarios](#common-scenarios)
+- [Companion: LLM Wiki](#companion-llm-wiki)
 - [Provider support](#provider-support)
 - [FAQ](#faq)
 - [What it is / what it isn't](#what-it-is--what-it-isnt)
@@ -193,6 +196,228 @@ Tell the agent: *"Use lazy cadence for this task."* The agent will update the br
 Tell the agent: *"Use aggressive cadence — this is critical."* The agent will update after every turn. Expect ~12–18% session token overhead in exchange for near-instant death survivability.
 
 ---
+
+## Companion: LLM Wiki
+
+Harness Bridge ships an optional companion prompt — [`prompts/vault-init.md`](./prompts/vault-init.md) — that bootstraps a personal **LLM Wiki**, also called an **AI brain** or **second brain**. It's a markdown-based knowledge base that an AI agent maintains for you over time.
+
+### What is an AI brain (second brain)?
+
+A second brain is a structured, interlinked collection of markdown files representing everything you've thought about, read, and decided on across your projects. Unlike a folder of notes, it has *structure*: entities (people, products), concepts (ideas, frameworks), sources (articles, transcripts), and syntheses (analyses, decisions). Pages link to each other; an index summarizes the whole; a log records the timeline of additions and changes.
+
+The point is **compounding**. Each new source you add is integrated into the existing structure — not just filed. New entity? Linked from every relevant concept page. New decision? Old syntheses that touched the same question are flagged for revision. Contradictions surface explicitly. After 50 sources, the wiki isn't 50 disconnected files — it's a cross-referenced map of your thinking.
+
+### Why it's not just "ChatGPT with file uploads"
+
+| | File-upload RAG | LLM Wiki |
+|---|---|---|
+| What happens when you add a doc | Indexed for retrieval | Read, summarized, integrated into existing pages, cross-referenced |
+| What accumulates between sessions | Nothing — retrieval is per-query | Persistent structured wiki you can browse and search |
+| Where the "thinking" lives | Re-derived from chunks every query | In syntheses, concept pages, decision logs |
+| What you can do after 6 months | Re-upload the docs and re-ask | Read your wiki and pick up where your thinking left off |
+
+RAG retrieves. The LLM Wiki **compiles** and **maintains**. The wiki keeps getting richer every time you add a source or ask a question — the LLM does the bookkeeping that historically killed personal wikis.
+
+### Vault vs. bridge — different problems, different tools
+
+| | LLM Wiki (vault) | Harness Bridge (project) |
+|---|---|---|
+| What it stores | Design rationale, decisions, research, syntheses | Current work-in-progress state of one task |
+| Lifespan | Long-lived — accumulates across projects and years | Per-task — overwritten on each handoff |
+| Maintenance pattern | LLM ingests sources, updates concepts, lints | LLM patches the bridge at checkpoints |
+| Path | A folder of your choice (typically an Obsidian vault) | `.harness/bridge.md` inside each project repo |
+| Audience | You (private second-brain) | You + future AI sessions (and possibly teammates) |
+
+### When the vault prompt is worth setting up
+
+- You're starting a non-trivial project and want design history preserved separately from the codebase.
+- You're doing research that spans weeks or months across many sources.
+- You have (or plan to have) multiple sibling project repos that share intellectual DNA.
+- You want a personal knowledge base that doesn't degrade — because the LLM does the maintenance, not you.
+- You want a reusable design playground you can return to months from now and still pick up exactly where you left off.
+
+### How to set up a vault — step by step
+
+1. **Choose a directory.** Anywhere on disk. If you use Obsidian, this directory will also be your Obsidian vault — you get the graph view and links for free. Example: `~/Documents/Knowledge Vault/`.
+2. **Open the directory in your AI agent.** `cd` into it and start Claude Code, Codex, Gemini CLI, or open it as a Cursor workspace.
+3. **Paste the contents of [`prompts/vault-init.md`](./prompts/vault-init.md)** as your first message to the agent.
+4. **Answer the agent's questions.** It will ask what domain the vault is for (research, software, personal, business, learning, etc.) so it can tailor the schema. Be specific — the schema written here defines how the vault works going forward.
+5. **Review the scaffold.** The agent creates `raw/`, `wiki/{entities,concepts,sources,syntheses}/`, `CLAUDE.md`, `AGENTS.md`, `wiki/index.md`, and `wiki/log.md`. Glance through `CLAUDE.md` — it's the schema future sessions will follow. Adjust if anything doesn't match how you actually want to work.
+6. **(Optional) `git init`** the vault if you want history. The vault is just markdown files; everything diffs and branches cleanly.
+
+That's the entire setup. From here on, every future session in this directory follows the schema automatically — `CLAUDE.md` is loaded on session start by whichever provider you're using.
+
+### Day-to-day: using your AI brain
+
+Once the vault exists, you **use it as a thinking partner**. You ask it questions, you push new sources into it, and you let it find connections you'd otherwise miss. The agent does the bookkeeping invisibly; your interaction stays at the level of ideas.
+
+You interact through three operations defined in the schema. **Query** is the one you'll use most.
+
+#### Query — ask your brain a question
+
+This is the main interface. Once the vault has content, you can ask it anything that touches what you've thought about, read, or decided. The agent reads `wiki/index.md` to locate relevant pages, drills in, follows `[[wikilinks]]`, and answers with citations to the underlying sources.
+
+**Examples of real queries**:
+
+- *"What did I conclude about token-bucket vs leaky-bucket rate limiting?"* → Agent pulls the relevant concept and synthesis pages, gives you the decision and why.
+- *"Summarize everything I know about Acme Corp."* → Agent reads the entity page plus every source that mentions them, returns a current briefing.
+- *"What are all the open questions across my active feature designs?"* → Agent scans `wiki/syntheses/` for "Open questions" sections, returns the list.
+- *"I'm about to start the auth rework. What design context do I already have?"* → Agent surfaces relevant concepts, prior decisions, abandoned alternatives.
+- *"Three months ago I was reading about X. What did I take away from it?"* → Agent finds the source page and any concept pages it informed.
+- *"What contradicts what I just claimed about Y?"* → Agent looks for opposing claims in older sources, surfaces the tension.
+
+If the answer itself is substantive — a comparison, an analysis, a novel connection between two concepts — the agent offers to **file it back** as a new `wiki/syntheses/<slug>.md`. This is how the wiki compounds: your explorations turn into permanent additions to your brain rather than vanishing into chat history.
+
+**Tip**: ask the wiki things before you start any non-trivial work. Five minutes of querying your past thinking saves hours of redoing it.
+
+#### Ingest — feed your brain a new source
+
+You curate sources; the agent integrates them. Sources can be anything: an article you read, a podcast transcript, a meeting note, a paper, a user-interview transcript, feedback from a customer, a half-formed idea you typed out.
+
+1. **Drop the source** into `raw/`. Use the filename to encode what it is (e.g. `raw/2026-05-22-user-interview-acme.md`, `raw/paper-token-bucket-rate-limiting.md`). Obsidian Web Clipper is great for grabbing web articles as markdown.
+2. **Tell the agent**: `ingest raw/<filename>`. The agent reads it end-to-end, then **discusses key takeaways with you before writing** — this is your chance to guide what to emphasize and to flag anything that contradicts what you already believe.
+3. **Confirm or guide**: say "proceed" or "emphasize X, downplay Y, then proceed."
+4. **The agent does the rest**: writes `wiki/sources/<slug>.md`, updates relevant entity and concept pages, creates stubs for important new mentions, updates the index, appends to the log. A single source typically touches 5–15 pages.
+5. **Browse the result.** Open Obsidian (or your editor of choice), follow the new links, glance at the graph view to see the wiki's shape change.
+
+**Tip**: ingest one source at a time and stay engaged. The conversation about takeaways is where the actual thinking happens — batch ingestion is faster but you lose the dialog.
+
+#### Lint — keep your brain healthy
+
+Periodically (every few weeks, or whenever you sense drift), say `lint`. The agent audits the wiki and reports:
+
+- Contradictions between pages
+- Stale claims newer sources have superseded
+- Orphan pages with no inbound links
+- Important concepts mentioned but lacking their own page
+- Missing cross-references
+- Gaps where a web search or a new source would help
+- Suggested next questions worth investigating
+
+Lint isn't maintenance you "have to" do — it's a directed exploration prompt. The agent telling you "you keep mentioning Concept X but never wrote a page for it" or "Source A and Source B disagree about Y" is genuinely useful — it surfaces gaps in your thinking, not just your filing.
+
+### A day in the life
+
+What using a second brain actually looks like, over a typical session:
+
+```
+You:    Read this article and integrate it.
+        [drops raw/article-multi-tenant-isolation.md]
+
+Agent:  Read it. Three things worth flagging before I write:
+        • It contradicts your existing claim in concepts/tenant-isolation.md
+          about row-level vs schema-level isolation
+        • It introduces a new pattern ("cell architecture") that doesn't
+          have a concept page yet
+        • The author cites your colleague's blog post from 2024 which
+          you've never ingested — worth grabbing too?
+        Proceed?
+
+You:    Yes — and grab the colleague's post when you find it.
+
+Agent:  [ingests both; writes 2 source pages, creates concepts/cell-architecture.md,
+         updates concepts/tenant-isolation.md with a contradictions section,
+         updates index and log. 11 pages touched.]
+
+You:    Given everything I now know, what's the right design for our
+        multi-tenant rewrite?
+
+Agent:  [reads relevant concept + synthesis pages]
+        Here's the synthesis I'd propose [...]
+        Want me to file this as wiki/syntheses/2026-05-22-multi-tenant-design.md?
+
+You:    Yes. And tell me what's still uncertain.
+
+Agent:  [files the synthesis; lists open questions]
+        Open questions remaining:
+        • [...]
+        • [...]
+        Suggest ingesting the AWS cell-architecture whitepaper next; it
+        addresses two of these directly.
+
+You:    Find and ingest it.
+
+[and so on]
+```
+
+Every step compounds. The article you read this afternoon is now connected to a decision you made last month. The synthesis you produced today is a `[[wikilink]]` away from any future query. You can come back in three weeks and pick up exactly where this thinking left off.
+
+### Where your second brain meets your project repos
+
+Once a synthesis in `wiki/syntheses/` is approved as a design, the implementation happens in a **sibling project repo** (separate `git init`). The vault tracks the *why*; the project tracks the *what*. Use Harness Bridge in the project to track in-flight implementation work. The vault's `CLAUDE.md` lists each paired project in a **Paired projects** table, so future sessions know where to find them.
+
+This way: when you sit down months later and say "let's continue Project X," the agent reads the vault's `CLAUDE.md`, finds the project path, switches context, reads `.harness/bridge.md` in the project, restates where you were, and you're back at full speed in under a minute.
+
+### What to ingest (and what to skip)
+
+Worth ingesting:
+- ✅ Articles and papers you actually read carefully
+- ✅ Transcripts of important meetings or user interviews
+- ✅ Your own thinking when you have a substantive insight (write it as a `raw/` note)
+- ✅ Decision documents, design specs, project briefs
+- ✅ Bug reports and feedback patterns that reveal something about your product
+
+Probably skip:
+- ❌ Things you skimmed and don't care about
+- ❌ Reference material that's already well-indexed elsewhere (you don't need to ingest the React docs)
+- ❌ Truly ephemeral notes (shopping lists, daily journal entries unless your vault is a personal one)
+- ❌ Auto-generated content (build logs, CI output)
+
+**The rule**: if you'd want a future-you (or a future session) to remember this in 6 months, ingest it.
+
+### The full workflow — vault + bridge + project
+
+Here's how the three pieces combine for a new project:
+
+```
+Step 1 — Vault (design phase)
+   Drop seed idea into raw/
+   Run `ingest`
+   Brainstorm with agent → wiki/syntheses/<feature>-design.md
+
+Step 2 — Project repo (greenfield)
+   git init a sibling repo to the vault
+   Paste prompts/init.md (Harness Bridge) inside the project
+   → maintainer snippet appended to CLAUDE.md / AGENTS.md / etc.
+   → .harness/bridge.md scaffolded
+
+Step 3 — Vault (register the project)
+   Add a row to the vault's Paired projects table in CLAUDE.md
+   → future sessions automatically know where the project lives
+
+Step 4 — Build
+   Work in the project repo; the agent maintains .harness/bridge.md at checkpoints
+   When the session dies / you switch providers / you context-switch:
+      paste prompts/consumer.md in the new session
+      → resumes exactly where the last one left off
+
+Step 5 — Loop
+   New decisions or learnings → also reflect into the vault
+      (update relevant concept pages, add new syntheses)
+   New features → start at Step 1 again
+```
+
+The vault and project are **independent git repos**. The vault stays private (it holds your unfiltered thinking). The project ships publicly (it's the polished deliverable).
+
+### What stays in the vault vs. what ships in the project
+
+| Goes in the vault | Ships in the project repo |
+|---|---|
+| Why you chose Approach A over B | The README explaining what Approach A is |
+| The decision log for v1 → v2 schema migration | The `CHANGELOG.md` summary |
+| Half-formed ideas you might come back to | Code, tests, docs that actually work |
+| User feedback patterns, raw interviews | Distilled docs informed by the feedback |
+| Competitive analysis, research notes | Nothing public about competitors |
+
+A useful test: if a contributor opened a PR, what would they need vs. what would feel weird seeing? PR-relevant artifacts go in the project. Your private thinking goes in the vault.
+
+### Provider compatibility
+
+The vault prompt works in any AI agent that can read and edit local files: Claude Code, Codex, Cursor, Gemini CLI, and others. Once the agent writes `CLAUDE.md` during setup, every future session automatically loads it as the schema. For agents that use a different instructions file (`AGENTS.md`, `GEMINI.md`), the setup also writes a one-line pointer pointing to `CLAUDE.md` so all providers see the same schema.
+
+### Removing the vault
+
+The vault is just a folder of markdown files. To "uninstall," delete the folder (or remove it from your Obsidian vaults list). Nothing's registered globally; nothing leaves the directory.
 
 ## Provider support
 

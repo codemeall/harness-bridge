@@ -23,8 +23,8 @@ Reserved names for v2: `/bridge-init`, `/bridge-save`, `/bridge-load`, `/bridge-
 - `GEMINI.md` content should be self-contained — same self-contained constraint as `CLAUDE.md`.
 
 ## Round-trip status
-Target for v1:
+v1 targets (not yet measured):
 - **Gemini CLI: 6/6 — fully supported.**
-- **Gemini Web: ≥3/6 — partially supported** (Tests A, B, C pass; Tests D and E require manual transcript export; Test F can run on manually exported transcripts).
+- **Gemini Web: ≥3/6 — partially supported** (Tests A, B, C expected to pass; Tests D and E require manual transcript export; Test F can run on manually exported transcripts).
 
 See `tests/round-trip.md`.

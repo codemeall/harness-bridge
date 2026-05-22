@@ -25,4 +25,4 @@ Reserved names for v2: `/bridge-init`, `/bridge-save`, `/bridge-load`, `/bridge-
 - Claude Code's auto-compact behavior may already summarize older parts of a long session; recovery from a heavily compacted transcript may lose detail. The bridge file itself is the safer source — recovery is the fallback.
 
 ## Round-trip status
-Target for v1: **6/6 — fully supported**. See `tests/round-trip.md`.
+v1 target: **6/6 — fully supported** (not yet measured — pending first run of `tests/round-trip.md`).

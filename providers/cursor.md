@@ -24,4 +24,4 @@ Reserved names for v2: `/bridge-init`, `/bridge-save`, `/bridge-load`, `/bridge-
 - Some Cursor configurations require enabling the rule file via the rules manager UI before it's actually loaded; check that the rule is active if the agent doesn't seem to follow it.
 
 ## Round-trip status
-Target for v1: **≥4/6 — partially supported**. Tests A, B, C, F should pass cleanly; Tests D and E (recovery modes) may require manual transcript export. See `tests/round-trip.md`.
+v1 target: **≥4/6 — partially supported** (not yet measured). Tests A, B, C, F expected to pass cleanly; Tests D and E (recovery modes) may require manual transcript export. See `tests/round-trip.md`.

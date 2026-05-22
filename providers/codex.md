@@ -23,4 +23,4 @@ Reserved names for v2: `/bridge-init`, `/bridge-save`, `/bridge-load`, `/bridge-
 - Codex tool surface differs from Claude Code in detail (patch semantics, command execution), but Harness Bridge only requires file read + file edit, which all variants support.
 
 ## Round-trip status
-Target for v1: **6/6 — fully supported**. See `tests/round-trip.md`.
+v1 target: **6/6 — fully supported** (not yet measured — pending first run of `tests/round-trip.md`).
