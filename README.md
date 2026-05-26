@@ -6,27 +6,50 @@
 
 **The fix.** The agent maintains a tiny markdown file at `.harness/bridge.md` while it works. When any session ends, a new session — same provider or different — reads that file, grounds itself in your repo's git state, restates what's going on, waits for your confirmation, and continues exactly where the previous one left off.
 
-**What you install.** No software. No CLI. No MCP server. A markdown schema, seven prompts, and a snippet appended to your provider's existing config file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/`).
+**What you install.** You can use Harness Bridge as plain markdown prompts, or configure it as a local MCP server so your coding agent can call bridge tools directly. In both modes, `.harness/bridge.md` stays the source of truth.
 
-**Companion workflow — the LLM Wiki.** Harness Bridge is paired with [`prompts/vault-init.md`](./prompts/vault-init.md), a separate one-shot prompt that bootstraps a personal **LLM Wiki** — a markdown-based knowledge base maintained entirely by an AI agent. Use the vault to capture design rationale, decisions, and research; use the bridge file in each project repo to track in-flight work. Together they form a complete AI development workflow: vault for the *why*, project for the *what*, bridge for the *current work*. See [Companion: LLM Wiki](#companion-llm-wiki) below.
+**Product boundary (important).** Harness Bridge and LLM Wiki are separate features:
+- **Harness Bridge** solves session-to-session handoff for in-flight work in one project repo.
+- **LLM Wiki** (optional companion via [`prompts/vault-init.md`](./prompts/vault-init.md)) creates a long-lived "second AI brain" for cross-project knowledge.
+
+Use both together if you want full coverage: vault for the *why*, project for the *what*, bridge for the *current work*. Jump to [Part B — LLM Wiki (optional companion)](#part-b--llm-wiki-optional-companion).
 
 ---
 
 ## Table of contents
 
+- [Part A - Harness Bridge (core)](#part-a--harness-bridge-core)
 - [What a bridge looks like](#what-a-bridge-looks-like)
 - [How it works in 30 seconds](#how-it-works-in-30-seconds)
 - [Install](#install)
 - [Use it](#use-it)
 - [Common scenarios](#common-scenarios)
-- [Companion: LLM Wiki](#companion-llm-wiki)
-- [Provider support](#provider-support)
-- [FAQ](#faq)
+- [Bridge prompt reference](#bridge-prompt-reference)
+- [Part B - LLM Wiki (optional companion)](#part-b--llm-wiki-optional-companion)
+- [What is an AI brain (second brain)?](#what-is-an-ai-brain-second-brain)
+- [Vault vs. bridge](#vault-vs-bridge--different-problems-different-tools)
+- [When the vault prompt is worth setting up](#when-the-vault-prompt-is-worth-setting-up)
+- [How to set up a vault](#how-to-set-up-a-vault--step-by-step)
+- [Day-to-day: using your AI brain](#day-to-day-using-your-ai-brain)
+- [Where your second brain meets your project repos](#where-your-second-brain-meets-your-project-repos)
+- [The full workflow - vault + bridge + project](#the-full-workflow--vault--bridge--project)
+- [Vault provider notes](#vault-provider-notes)
+- [Uninstall (vault)](#uninstall-vault)
+- [Provider support (bridge)](#provider-support-bridge)
+- [MCP integration](#mcp-integration)
+- [MCP usage guide](./docs/mcp-usage.md)
+- [FAQ (bridge)](#faq-bridge)
 - [What it is / what it isn't](#what-it-is--what-it-isnt)
-- [Removing it](#removing-it)
+- [Uninstall (bridge)](#uninstall-bridge)
 - [Project status & roadmap](#project-status--roadmap)
 - [Contributing](#contributing)
 - [License](#license)
+
+---
+
+## Part A — Harness Bridge (core)
+
+Harness Bridge is the core feature in this repo. If your goal is reliable handoff between AI sessions while coding in a project repo, stay in Part A.
 
 ---
 
@@ -197,7 +220,28 @@ Tell the agent: *"Use aggressive cadence — this is critical."* The agent will 
 
 ---
 
-## Companion: LLM Wiki
+## Bridge prompt reference
+
+Harness Bridge uses six operational prompts:
+
+| Prompt | When to use it | Purpose |
+|---|---|---|
+| [`prompts/init.md`](./prompts/init.md) | First-time setup in a project repo | Installs bridge maintainer instructions and scaffolds `.harness/bridge.md` |
+| [`prompts/maintainer.md`](./prompts/maintainer.md) | Manual setup only | Source of the maintainer snippet used by `init` |
+| [`prompts/producer.md`](./prompts/producer.md) | End of a session (optional but recommended) | Finalize handoff before switching session/provider |
+| [`prompts/consumer.md`](./prompts/consumer.md) | Start of a new session | Read bridge, restate state, confirm, and resume |
+| [`prompts/recover.md`](./prompts/recover.md) | Bridge is stale/missing/suspect | Rebuild or verify bridge from transcript |
+| [`prompts/uninstall.md`](./prompts/uninstall.md) | Remove Harness Bridge from a repo | Removes `.harness/` and maintainer snippet |
+
+Optional companion prompt (separate feature):
+
+| Prompt | Feature | Purpose |
+|---|---|---|
+| [`prompts/vault-init.md`](./prompts/vault-init.md) | LLM Wiki | Bootstraps a separate long-lived knowledge vault ("second AI brain") |
+
+---
+
+## Part B — LLM Wiki (optional companion)
 
 Harness Bridge ships an optional companion prompt — [`prompts/vault-init.md`](./prompts/vault-init.md) — that bootstraps a personal **LLM Wiki**, also called an **AI brain** or **second brain**. It's a markdown-based knowledge base that an AI agent maintains for you over time.
 
@@ -411,15 +455,21 @@ The vault and project are **independent git repos**. The vault stays private (it
 
 A useful test: if a contributor opened a PR, what would they need vs. what would feel weird seeing? PR-relevant artifacts go in the project. Your private thinking goes in the vault.
 
-### Provider compatibility
+### Vault provider notes
 
 The vault prompt works in any AI agent that can read and edit local files: Claude Code, Codex, Cursor, Gemini CLI, and others. Once the agent writes `CLAUDE.md` during setup, every future session automatically loads it as the schema. For agents that use a different instructions file (`AGENTS.md`, `GEMINI.md`), the setup also writes a one-line pointer pointing to `CLAUDE.md` so all providers see the same schema.
 
-### Removing the vault
+### Uninstall (vault)
 
 The vault is just a folder of markdown files. To "uninstall," delete the folder (or remove it from your Obsidian vaults list). Nothing's registered globally; nothing leaves the directory.
 
-## Provider support
+---
+
+## Back to Harness Bridge
+
+The sections below return to bridge-specific operational details.
+
+## Provider support (bridge)
 
 | Provider | Maintainer auto-loads from | Continuous updates | Consumer | Recovery |
 |---|---|---|---|---|
@@ -431,9 +481,33 @@ The vault is just a folder of markdown files. To "uninstall," delete the folder 
 
 The transport layer is plain markdown files, so any agent that can read and edit local files can use Harness Bridge — even tools not listed above. Provider docs in [`providers/`](./providers/) cover transcript locations and known quirks per agent.
 
+## MCP integration
+
+Harness Bridge includes a local stdio MCP server and CLI package.
+
+With npm:
+
+```bash
+npx -y harness-bridge mcp
+```
+
+With a Git checkout:
+
+```bash
+git clone <repo-url>
+cd harness-bridge
+npm install
+npm run build
+node /absolute/path/to/harness-bridge/dist/cli.js mcp
+```
+
+The MCP server exposes deterministic local tools for bridge status, init, checkpoint, produce, consume, recover, and validation while keeping `.harness/bridge.md` as the source of truth. See [`providers/mcp.md`](./providers/mcp.md), [`docs/mcp-usage.md`](./docs/mcp-usage.md), and [`templates/`](./templates/) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup snippets.
+
+For end-to-end setup and daily workflow examples, read [`docs/mcp-usage.md`](./docs/mcp-usage.md).
+
 ---
 
-## FAQ
+## FAQ (bridge)
 
 ### Does this cost extra tokens?
 
@@ -461,7 +535,7 @@ You can — recovery mode reads transcripts. But transcripts are dense, full of 
 
 ### Is this an MCP server / CLI / extension?
 
-No. It's a documented convention plus markdown files. There's nothing to install beyond pasting a snippet into your provider's config file. A CLI and MCP server are on the v2 roadmap; v1 wants to validate the schema first.
+The original workflow is a documented convention plus markdown files. The MCP server and CLI let developer agents use the same workflow without copy-pasting every operational prompt.
 
 ### Will this work in [tool not listed]?
 
@@ -489,7 +563,7 @@ Lineage from the original concept note. The name is preserved through v1; we may
 
 ---
 
-## Removing it
+## Uninstall (bridge)
 
 Paste [`prompts/uninstall.md`](./prompts/uninstall.md) into a session. It removes both install artifacts:
 
@@ -514,8 +588,6 @@ Re-installation is always possible via `prompts/init.md`.
 These are real ideas, deliberately out of scope until v1 proves the schema:
 
 - Slash-command wrappers per provider (`/bridge-init`, `/bridge-save`, etc.).
-- Standalone CLI (`harness export` / `harness import`).
-- MCP server for uniform provider integration.
 - Automated round-trip test harness driving headless agents.
 - Multi-agent concurrent edit support and state reconciliation.
 - Multi-hop chains (agent A → B → C).

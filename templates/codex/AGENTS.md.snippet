@@ -1,0 +1,16 @@
+## Harness Bridge MCP
+
+This repo uses Harness Bridge for serial AI-agent handoff through `.harness/bridge.md`.
+
+When the `harness-bridge` MCP server is configured, use it for bridge operations:
+
+- `bridge_status` before trusting existing bridge state.
+- `bridge_init` for first setup.
+- `bridge_checkpoint` after meaningful checkpoints.
+- `bridge_produce` before a deliberate handoff.
+- `bridge_consume` when resuming work.
+- `bridge_recover` when the bridge is stale, missing, or suspect.
+
+After `bridge_consume`, restate the current goal, completed work, discrepancies, and next action, then wait for explicit user confirmation before editing files.
+
+Keep `.harness/bridge.md` terse and secret-free.

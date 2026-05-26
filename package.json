@@ -1,0 +1,38 @@
+{
+  "name": "harness-bridge",
+  "version": "0.1.0",
+  "description": "MCP-first local tooling for Harness Bridge markdown handoffs.",
+  "type": "module",
+  "bin": {
+    "harness-bridge": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "prompts",
+    "providers",
+    "templates",
+    "SPEC.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "yaml": "^2.8.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

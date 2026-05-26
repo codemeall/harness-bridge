@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "harness-bridge": {
+      "command": "npx",
+      "args": ["-y", "harness-bridge", "mcp"]
+    }
+  }
+}
