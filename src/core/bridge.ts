@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { getGitState, getRepoRoot } from "./git.js";
+import { getGitState, getRepoRoot, gitDiffFromHead, gitLogRange, gitStatusForFile } from "./git.js";
 import type {
   BridgeDocument,
   BridgeFrontmatter,
@@ -38,6 +38,13 @@ const REQUIRED_FRONTMATTER = [
   "dirty"
 ];
 
+const SECRET_PATTERNS = [
+  /\bsk-[A-Za-z0-9_-]{20,}\b/,
+  /\b[A-Za-z0-9_-]*token[A-Za-z0-9_-]*\s*[:=]\s*[^\s"'`]+/i,
+  /\b[A-Za-z0-9_-]*password[A-Za-z0-9_-]*\s*[:=]\s*[^\s"'`]+/i,
+  /\b[A-Za-z0-9_-]*api[_-]?key[A-Za-z0-9_-]*\s*[:=]\s*[^\s"'`]+/i
+];
+
 export function bridgePath(cwd: string): string {
   return path.join(getRepoRoot(cwd), BRIDGE_RELATIVE_PATH);
 }
@@ -49,6 +56,13 @@ export function nowIso(): string {
 function normalizePlaceholder(value?: string): string {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : "_(none)_";
+}
+
+function assertNoCredentialShapedContent(doc: BridgeDocument): void {
+  const rendered = renderBridge(doc);
+  if (SECRET_PATTERNS.some((pattern) => pattern.test(rendered))) {
+    throw new Error("Refusing to write .harness/bridge.md because it contains credential-shaped content.");
+  }
 }
 
 function ensurePlanLegend(plan: string): string {
@@ -184,6 +198,11 @@ export function writeBridge(cwd: string, doc: BridgeDocument): string {
   const file = bridgePath(cwd);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const rendered = renderBridge(doc);
+  const validation = validateBridge(rendered);
+  if (!validation.valid) {
+    throw new Error(`Refusing to write invalid bridge: ${validation.errors.join("; ")}`);
+  }
+  assertNoCredentialShapedContent(doc);
   fs.writeFileSync(file, rendered, "utf8");
   return rendered;
 }
@@ -299,7 +318,35 @@ export function getStatus(cwd: string): StatusResult {
   if (bridge.frontmatter.head !== git.head) discrepancies.push(`head: bridge=${bridge.frontmatter.head} git=${git.head}`);
   if (bridge.frontmatter.dirty !== git.dirty) discrepancies.push(`dirty: bridge=${bridge.frontmatter.dirty} git=${git.dirty}`);
 
-  return { exists, path: file, validation, bridge, git, discrepancies };
+  const gitLogSinceBridgeHead = bridge.frontmatter.head !== git.head ? gitLogRange(cwd, bridge.frontmatter.head) : "";
+  const fileGrounding = extractFilesTouched(bridge.sections["Files touched"]).map((touchedFile) => ({
+    file: touchedFile,
+    diffFromBridgeHead: gitDiffFromHead(cwd, bridge.frontmatter.head, touchedFile),
+    status: gitStatusForFile(cwd, touchedFile)
+  }));
+
+  return { exists, path: file, validation, bridge, git, discrepancies, gitLogSinceBridgeHead, fileGrounding };
+}
+
+function extractFilesTouched(filesTouched: string | undefined): string[] {
+  if (!filesTouched || filesTouched.trim() === "_(none)_") {
+    return [];
+  }
+
+  const files = new Set<string>();
+  for (const line of filesTouched.split("\n")) {
+    const backtickMatch = line.match(/`([^`]+)`/);
+    if (backtickMatch) {
+      files.add(backtickMatch[1]);
+      continue;
+    }
+
+    const bulletPath = line.match(/^[-*]\s+([^\s]+)\s+/);
+    if (bulletPath) {
+      files.add(bulletPath[1]);
+    }
+  }
+  return [...files];
 }
 
 export function summarizeForConsume(cwd: string): string {
@@ -311,17 +358,43 @@ export function summarizeForConsume(cwd: string): string {
   const bridge = status.bridge;
   const discrepancyText =
     status.discrepancies.length > 0 ? `\n\nDiscrepancies:\n${status.discrepancies.map((item) => `- ${item}`).join("\n")}` : "";
+  const gitLogText = status.gitLogSinceBridgeHead
+    ? `Git commits since bridge head:\n${status.gitLogSinceBridgeHead}`
+    : "";
+  const groundingText =
+    status.fileGrounding && status.fileGrounding.length > 0
+      ? `File grounding:\n${status.fileGrounding
+          .map((item) => {
+            const details = [
+              `- ${item.file}`,
+              item.status ? `  status: ${item.status}` : "",
+              item.diffFromBridgeHead ? `  diff from bridge head:\n${indent(item.diffFromBridgeHead, "  ")}` : "  diff from bridge head: _(none)_"
+            ].filter(Boolean);
+            return details.join("\n");
+          })
+          .join("\n")}`
+      : "";
 
   return [
     `Goal:\n${bridge.sections.Goal}`,
     `Done / plan:\n${bridge.sections.Plan}`,
     `Next action:\n${bridge.sections["Next action"]}`,
     `Files touched:\n${bridge.sections["Files touched"]}`,
+    gitLogText,
+    groundingText,
     "Stop here and wait for explicit user confirmation before executing the next action.",
     discrepancyText.trim()
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+function indent(text: string, prefix: string): string {
+  return text
+    .trimEnd()
+    .split("\n")
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
 }
 
 export function redactSecrets(text: string): string {

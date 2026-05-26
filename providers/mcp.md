@@ -18,7 +18,10 @@ node /absolute/path/to/harness-bridge/dist/cli.js mcp
 
 The MCP server operates on the current local repository and keeps `.harness/bridge.md` as the source of truth. It does not replace the markdown schema; it automates common bridge operations.
 
+It also exposes the canonical `prompts/*.md` files as MCP prompts/resources, so agents can retrieve the original prompt text when they need the full instruction wording.
+
 For an end-to-end setup and daily workflow guide, see [`docs/mcp-usage.md`](../docs/mcp-usage.md).
+For the prompt-to-tool conformance map, see [`docs/mcp-prompt-alignment.md`](../docs/mcp-prompt-alignment.md).
 
 ## Tools
 
@@ -31,6 +34,8 @@ For an end-to-end setup and daily workflow guide, see [`docs/mcp-usage.md`](../d
 | `bridge_consume` | Return grounded state for a fresh session; the agent must restate and wait for confirmation. |
 | `bridge_recover` | Validate/write agent-supplied recovered bridge content or help with verify-mode transcript review. |
 | `bridge_validate` | Validate bridge markdown against `harness-bridge/v1`. |
+
+`bridge_init` can also install the maintainer snippet when called with `installInstructionsFor` set to `claude-code`, `codex`, `gemini-cli`, or `cursor`.
 
 ## Provider setup
 

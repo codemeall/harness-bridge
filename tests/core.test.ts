@@ -120,6 +120,46 @@ describe("bridge core", () => {
     expect(summary).toContain("wait for explicit user confirmation");
   });
 
+  it("grounds consume output in files touched", () => {
+    initBridge({
+      cwd: tempDir,
+      generatedBy: "vitest",
+      title: "Test handoff",
+      goal: "Make the test fixture resumable across agents.",
+      nextAction: "Run npm test."
+    });
+    fs.writeFileSync(path.join(tempDir, "README.md"), "# Changed\n", "utf8");
+
+    checkpointBridge({
+      cwd: tempDir,
+      generatedBy: "vitest",
+      filesTouched: "- `README.md` — changed fixture readme",
+      nextAction: "Review README.md."
+    });
+
+    const summary = summarizeForConsume(tempDir);
+    expect(summary).toContain("File grounding:");
+    expect(summary).toContain("README.md");
+    expect(summary).toContain("diff from bridge head:");
+  });
+
+  it("refuses to write credential-shaped content", () => {
+    initBridge({
+      cwd: tempDir,
+      generatedBy: "vitest",
+      title: "Test handoff",
+      goal: "Make the test fixture resumable across agents."
+    });
+
+    expect(() =>
+      checkpointBridge({
+        cwd: tempDir,
+        generatedBy: "vitest",
+        nextAction: "Use api_key=super-secret-value"
+      })
+    ).toThrow(/credential-shaped/);
+  });
+
   it("round-trips unknown frontmatter fields", () => {
     const doc = initBridge({
       cwd: tempDir,

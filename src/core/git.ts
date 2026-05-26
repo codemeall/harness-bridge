@@ -59,3 +59,21 @@ export function gitDiffFromHead(cwd: string, head: string, file: string): string
     return "";
   }
 }
+
+export function gitStatusForFile(cwd: string, file: string): string {
+  const root = getRepoRoot(cwd);
+  try {
+    return runGit(root, ["status", "--short", "--", file]);
+  } catch {
+    return "";
+  }
+}
+
+export function gitLogRange(cwd: string, fromHead: string, toHead = "HEAD"): string {
+  const root = getRepoRoot(cwd);
+  try {
+    return runGit(root, ["log", `${fromHead}..${toHead}`, "--oneline"]);
+  } catch {
+    return "";
+  }
+}

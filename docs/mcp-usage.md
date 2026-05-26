@@ -7,6 +7,10 @@ Harness Bridge can be used in two ways:
 
 Use the MCP workflow when your agent supports MCP. It keeps `.harness/bridge.md` as the source of truth and removes most prompt copy-paste.
 
+The MCP server exposes the canonical files in `prompts/` as MCP prompts/resources, and the tools implement the same lifecycle in deterministic code where validation, git-state checks, and bridge writes are safer than prompt-only behavior.
+
+For the exact prompt-to-tool mapping, see [`docs/mcp-prompt-alignment.md`](./mcp-prompt-alignment.md).
+
 ## What developers get
 
 After setup, your agent can use these tools:
@@ -20,6 +24,16 @@ After setup, your agent can use these tools:
 | `bridge_consume` | Reads the bridge in a new session and returns the current state. |
 | `bridge_recover` | Helps recover a stale or missing bridge from transcript evidence. |
 | `bridge_validate` | Validates bridge markdown against the schema. |
+
+The server also exposes these prompt resources for agents that want the canonical prompt text:
+
+- `bridge_init_prompt`
+- `bridge_maintainer_prompt`
+- `bridge_producer_prompt`
+- `bridge_consumer_prompt`
+- `bridge_recover_prompt`
+- `bridge_uninstall_prompt`
+- `bridge_vault_init_prompt`
 
 ## Requirements
 
@@ -236,6 +250,7 @@ Expected result:
 
 - Agent calls `bridge_init`.
 - `.harness/bridge.md` is created.
+- If requested, the agent passes `installInstructionsFor` to add the maintainer snippet to `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `.cursor/rules/harness-bridge.md`.
 - You review the bridge before committing.
 
 ### 2. Work normally
@@ -281,7 +296,7 @@ Consume the Harness Bridge and restate where we are.
 Expected result:
 
 - Agent calls `bridge_consume`.
-- Agent restates the goal, completed work, discrepancies, and next action.
+- Agent restates the goal, completed work, git discrepancies, file grounding, and next action.
 - Agent stops and waits for your confirmation before editing files.
 
 After confirming, the new agent continues from the bridge and keeps updating it at checkpoints.
@@ -323,6 +338,7 @@ Modes:
 ## Safety rules
 
 - Do not put secrets, tokens, `.env` values, passwords, or raw transcripts in `.harness/bridge.md`.
+- MCP bridge writes validate the schema and refuse credential-shaped content before writing.
 - Keep decisions append-only. Supersede old decisions with new entries instead of rewriting history.
 - Use serial handoffs: one agent works, then another agent resumes. Concurrent bridge editing is not supported yet.
 - Keep durable design rationale in docs or your vault/wiki; keep current task state in `.harness/bridge.md`.

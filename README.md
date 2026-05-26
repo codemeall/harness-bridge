@@ -501,7 +501,7 @@ npm run build
 node /absolute/path/to/harness-bridge/dist/cli.js mcp
 ```
 
-The MCP server exposes deterministic local tools for bridge status, init, checkpoint, produce, consume, recover, and validation while keeping `.harness/bridge.md` as the source of truth. See [`providers/mcp.md`](./providers/mcp.md), [`docs/mcp-usage.md`](./docs/mcp-usage.md), and [`templates/`](./templates/) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup snippets.
+The MCP server exposes deterministic local tools for bridge status, init, checkpoint, produce, consume, recover, and validation while keeping `.harness/bridge.md` as the source of truth. It also exposes the canonical `prompts/*.md` files as MCP prompts/resources. See [`providers/mcp.md`](./providers/mcp.md), [`docs/mcp-usage.md`](./docs/mcp-usage.md), and [`templates/`](./templates/) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup snippets.
 
 For end-to-end setup and daily workflow examples, read [`docs/mcp-usage.md`](./docs/mcp-usage.md).
 

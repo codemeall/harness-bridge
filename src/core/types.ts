@@ -40,6 +40,14 @@ export interface StatusResult {
   bridge?: BridgeDocument;
   git: GitState;
   discrepancies: string[];
+  gitLogSinceBridgeHead?: string;
+  fileGrounding?: FileGrounding[];
+}
+
+export interface FileGrounding {
+  file: string;
+  diffFromBridgeHead: string;
+  status: string;
 }
 
 export interface InitOptions {
