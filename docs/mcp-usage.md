@@ -47,10 +47,10 @@ The server also exposes these prompt resources for agents that want the canonica
 
 ### Option A: npm package
 
-Use this when `harness-bridge` is available from npm:
+Use this when `@codemeall/harness-bridge` is available from npm:
 
 ```bash
-npx -y harness-bridge mcp
+npx -y @codemeall/harness-bridge mcp
 ```
 
 You normally do not run this command by hand. Add it to your agent's MCP config and the agent starts it when needed.
@@ -88,7 +88,7 @@ Replace `/absolute/path/to/harness-bridge` with the real path to your clone.
 With npm:
 
 ```bash
-claude mcp add --transport stdio harness-bridge -- npx -y harness-bridge mcp
+claude mcp add --transport stdio harness-bridge -- npx -y @codemeall/harness-bridge mcp
 ```
 
 With a Git checkout:
@@ -115,7 +115,7 @@ With npm:
   "mcpServers": {
     "harness-bridge": {
       "command": "npx",
-      "args": ["-y", "harness-bridge", "mcp"]
+      "args": ["-y", "@codemeall/harness-bridge", "mcp"]
     }
   }
 }
@@ -150,7 +150,7 @@ With npm:
 ```toml
 [mcp_servers.harness-bridge]
 command = "npx"
-args = ["-y", "harness-bridge", "mcp"]
+args = ["-y", "@codemeall/harness-bridge", "mcp"]
 ```
 
 With a Git checkout:
@@ -178,7 +178,7 @@ With npm:
   "mcpServers": {
     "harness-bridge": {
       "command": "npx",
-      "args": ["-y", "harness-bridge", "mcp"]
+      "args": ["-y", "@codemeall/harness-bridge", "mcp"]
     }
   }
 }
@@ -214,7 +214,7 @@ With npm:
   "mcpServers": {
     "harness-bridge": {
       "command": "npx",
-      "args": ["-y", "harness-bridge", "mcp"]
+      "args": ["-y", "@codemeall/harness-bridge", "mcp"]
     }
   }
 }
@@ -364,7 +364,7 @@ Modes:
 
 | Symptom | Fix |
 |---|---|
-| Agent cannot see Harness Bridge tools | Confirm the MCP config points to `npx -y harness-bridge mcp` or `node /absolute/path/to/harness-bridge/dist/cli.js mcp`, then restart the agent/editor. |
+| Agent cannot see Harness Bridge tools | Confirm the MCP config points to `npx -y @codemeall/harness-bridge mcp` or `node /absolute/path/to/harness-bridge/dist/cli.js mcp`, then restart the agent/editor. |
 | Git-checkout command cannot find `dist/cli.js` | Run `npm install` and `npm run build` in the Harness Bridge clone. |
 | `npx` fails with cache permission errors | Fix the local npm cache ownership or use the Git-checkout setup. |
 | `bridge_status` says `head` or `dirty` differs | Read the discrepancy before acting; the bridge may be stale or the repo may have new uncommitted work. |

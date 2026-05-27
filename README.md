@@ -127,7 +127,7 @@ The easiest path is MCP. You configure the server once per agent/editor, then in
 Configure Harness Bridge as a local stdio MCP server:
 
 ```bash
-npx -y harness-bridge mcp
+npx -y @codemeall/harness-bridge mcp
 ```
 
 You normally do not run that command by hand; add it to your agent's MCP config so the agent starts it when needed. See [`docs/mcp-usage.md`](./docs/mcp-usage.md) and [`providers/mcp.md`](./providers/mcp.md) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup.
@@ -293,7 +293,7 @@ Harness Bridge includes a local stdio MCP server and CLI package.
 With npm:
 
 ```bash
-npx -y harness-bridge mcp
+npx -y @codemeall/harness-bridge mcp
 ```
 
 With a Git checkout:

@@ -7,6 +7,8 @@ All notable changes to Harness Bridge are documented here. The project adheres t
 ### Changed
 - Reorganized public documentation so Harness Bridge and LLM Wiki are presented as separate products: the root README now focuses on bridge handoffs, and LLM Wiki has its own guide at `docs/llm-wiki.md`.
 - Updated the README onboarding to recommend MCP first for supported agents, with prompt paste flows documented as fallback/manual paths.
+- Updated npm package references to the scoped package name `@codemeall/harness-bridge`; the CLI binary remains `harness-bridge`.
+- Ignored local `.npmrc` files so npm auth tokens are not accidentally committed.
 
 ### Added
 - LLM Wiki vault tooling distributed via MCP: new `vault_init` and `vault_status` tools, plus `harness-bridge vault-init` / `vault-status` CLI subcommands. `vault_init` scaffolds the canonical folder structure (`raw/`, `raw/assets/`, `wiki/{entities,concepts,sources,syntheses}/`), writes `CLAUDE.md`, `AGENTS.md`, `wiki/index.md`, and `wiki/log.md`, and auto-detects whether to write standalone (empty dir) or co-located with an existing project (appends a marker-fenced `<!-- harness-bridge:vault-schema -->` block to host `CLAUDE.md` / `AGENTS.md`, leaving host content untouched). `vault_status` reports scaffold state and surfaces pending ingests (files in `raw/` with no matching `wiki/sources/<slug>.md`). Idempotent on re-run via the marker; vault-specific collision rules refuse only on existing `wiki/` without `force: true`.

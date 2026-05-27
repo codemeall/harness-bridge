@@ -1,10 +1,10 @@
 {
-  "name": "harness-bridge",
+  "name": "@codemeall/harness-bridge",
   "version": "0.1.0",
   "description": "MCP-first local tooling for Harness Bridge markdown handoffs.",
   "type": "module",
   "bin": {
-    "harness-bridge": "./dist/cli.js"
+    "harness-bridge": "dist/cli.js"
   },
   "files": [
     "dist",

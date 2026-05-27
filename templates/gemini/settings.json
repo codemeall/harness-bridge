@@ -2,7 +2,7 @@
   "mcpServers": {
     "harness-bridge": {
       "command": "npx",
-      "args": ["-y", "harness-bridge", "mcp"]
+      "args": ["-y", "@codemeall/harness-bridge", "mcp"]
     }
   }
 }

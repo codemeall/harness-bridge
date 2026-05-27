@@ -3,7 +3,7 @@
 Harness Bridge can run as a local stdio MCP server:
 
 ```bash
-npx -y harness-bridge mcp
+npx -y @codemeall/harness-bridge mcp
 ```
 
 For a local Git checkout:
@@ -53,7 +53,7 @@ LLM Wiki setup and daily usage live in [`docs/llm-wiki.md`](../docs/llm-wiki.md)
 ### Claude Code
 
 ```bash
-claude mcp add --transport stdio harness-bridge -- npx -y harness-bridge mcp
+claude mcp add --transport stdio harness-bridge -- npx -y @codemeall/harness-bridge mcp
 ```
 
 Optional: copy `templates/claude/SKILL.md` to `.claude/skills/harness-bridge/SKILL.md` for workflow guidance.

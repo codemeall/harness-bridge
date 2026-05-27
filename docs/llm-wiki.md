@@ -51,7 +51,7 @@ Two setup paths are supported. MCP is recommended when your agent supports it; t
 Configure the package as an MCP server in your agent:
 
 ```bash
-npx -y harness-bridge mcp
+npx -y @codemeall/harness-bridge mcp
 ```
 
 Or from a Git checkout:
