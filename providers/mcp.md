@@ -34,25 +34,19 @@ For the prompt-to-tool conformance map, see [`docs/mcp-prompt-alignment.md`](../
 | `bridge_consume` | Return grounded state for a fresh session; the agent must restate and wait for confirmation. |
 | `bridge_recover` | Validate/write agent-supplied recovered bridge content or help with verify-mode transcript review. |
 | `bridge_validate` | Validate bridge markdown against `harness-bridge/v1`. |
-| `vault_init` | Scaffold an LLM Wiki / second-brain vault (folders + `CLAUDE.md` + `AGENTS.md` + `wiki/index.md` + `wiki/log.md`) in the current dir. Works standalone or alongside an existing project. |
-| `vault_status` | Report vault scaffold state and surface pending ingests (files in `raw/` with no matching `wiki/sources/<slug>.md`). |
 
 `bridge_init` can also install the maintainer snippet when called with `installInstructionsFor` set to `claude-code`, `codex`, `gemini-cli`, or `cursor`.
 
-## Vault setup
+## LLM Wiki tools
 
-The same `npx -y harness-bridge mcp` install gives you the vault tools. After your agent is connected, say:
+The same MCP server also includes tools for the separate LLM Wiki product:
 
-```text
-Use harness-bridge to initialize an LLM Wiki vault here. Name: "knowledge"
-```
+| Tool | Purpose |
+|---|---|
+| `vault_init` | Scaffold a markdown knowledge vault with `raw/`, `wiki/`, schema files, index, and log. |
+| `vault_status` | Report vault scaffold state and pending ingests from `raw/`. |
 
-The agent calls `vault_init`. Result:
-
-- **Empty directory** → a standalone vault: `raw/`, `wiki/{entities,concepts,sources,syntheses}/`, `CLAUDE.md`, `AGENTS.md`, `wiki/index.md`, `wiki/log.md`.
-- **Existing project repo** → folders created in-place; the vault schema is appended to your existing `CLAUDE.md` / `AGENTS.md` inside `<!-- harness-bridge:vault-schema -->` markers, leaving the host content untouched. Idempotent — re-running detects the marker and skips.
-
-After init, drop source documents (PRDs, transcripts, articles, meeting notes, PDFs, screenshots into `raw/assets/`) into `raw/` and tell the agent `ingest raw/<file>` or `ingest <url>`. The agent follows the schema in `CLAUDE.md` to summarize and integrate them into the wiki.
+LLM Wiki setup and daily usage live in [`docs/llm-wiki.md`](../docs/llm-wiki.md).
 
 ## Provider setup
 

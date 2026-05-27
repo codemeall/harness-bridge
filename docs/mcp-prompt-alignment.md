@@ -21,7 +21,7 @@ The MCP server should not parse natural-language prompts as its execution engine
 | `prompts/consumer.md` | `bridge_consume`, `bridge_status` | Reads bridge state, compares git state, includes git-log/file grounding, and returns the explicit confirmation gate. The agent must restate and wait before editing. |
 | `prompts/recover.md` | `bridge_recover` plus prompt/resource exposure | Validates and writes recovered bridge markdown after confirmation. Transcript interpretation remains agent work because provider transcript formats differ. |
 | `prompts/uninstall.md` | prompt/resource exposure only | Full uninstall is still prompt/manual for now; no destructive MCP uninstall tool exists yet. |
-| `prompts/vault-init.md` | `vault_init`, `vault_status` plus prompt/resource exposure | Deterministic scaffold of the LLM Wiki folders and schema files. Auto-detects standalone (empty dir) vs co-located (existing project) and appends a marker-fenced vault-schema block to a host `CLAUDE.md` / `AGENTS.md` in the co-located case. Ingest/query/lint stay agent-driven because they need judgment; the prompt remains the canonical source for those operations. |
+| `prompts/vault-init.md` | `vault_init`, `vault_status` plus prompt/resource exposure | Separate LLM Wiki product workflow. Deterministically scaffolds wiki folders and schema files, auto-detects standalone vs co-located setup, and appends a marker-fenced vault-schema block to a host `CLAUDE.md` / `AGENTS.md` when needed. Ingest/query/lint stay agent-driven because they need judgment; the prompt remains the canonical source for those operations. |
 
 ## Current limitations
 

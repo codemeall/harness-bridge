@@ -2,7 +2,7 @@
 
 Use this prompt to set up an **LLM Wiki** (a personal knowledge base maintained by an AI agent) in a fresh directory. The result is a place where you curate sources and ask questions; the agent does all the bookkeeping — summarizing, cross-referencing, filing, flagging contradictions, keeping the index and log current.
 
-This is the companion to the Harness Bridge workflow. The bridge handles **in-session continuity** for a single project; the vault handles **cross-project knowledge accumulation**. Together: vault for the *why*, project repos for the *what*, bridge files for the *current work*.
+This is a separate product workflow from Harness Bridge. Harness Bridge handles **in-session continuity** for a single project; LLM Wiki handles **cross-project knowledge accumulation**. Together: wiki for the *why*, project repos for the *what*, bridge files for the *current work*.
 
 Paste this entire prompt as your first message to a fresh AI agent session, opened in the directory you want to become your vault.
 

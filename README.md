@@ -6,35 +6,22 @@
 
 **The fix.** The agent maintains a tiny markdown file at `.harness/bridge.md` while it works. When any session ends, a new session — same provider or different — reads that file, grounds itself in your repo's git state, restates what's going on, waits for your confirmation, and continues exactly where the previous one left off.
 
-**What you install.** You can use Harness Bridge as plain markdown prompts, or configure it as a local MCP server so your coding agent can call bridge tools directly. In both modes, `.harness/bridge.md` stays the source of truth.
+**What you install.** Recommended: configure the local MCP server so your coding agent can call bridge tools directly. If your agent does not support MCP, use the prompt-only fallback. In both modes, `.harness/bridge.md` stays the source of truth.
 
-**Product boundary (important).** Harness Bridge and LLM Wiki are separate features:
-- **Harness Bridge** solves session-to-session handoff for in-flight work in one project repo.
-- **LLM Wiki** (optional companion via [`prompts/vault-init.md`](./prompts/vault-init.md)) creates a long-lived "second AI brain" for cross-project knowledge.
-
-Use both together if you want full coverage: vault for the *why*, project for the *what*, bridge for the *current work*. Jump to [Part B — LLM Wiki (optional companion)](#part-b--llm-wiki-optional-companion).
+**Related product.** LLM Wiki is a separate markdown knowledge-base workflow for long-lived research, design rationale, and decisions. Harness Bridge tracks the current task; LLM Wiki tracks the durable context around the work. See [`docs/llm-wiki.md`](./docs/llm-wiki.md).
 
 ---
 
 ## Table of contents
 
-- [Part A - Harness Bridge (core)](#part-a--harness-bridge-core)
+- [Harness Bridge core](#harness-bridge-core)
 - [What a bridge looks like](#what-a-bridge-looks-like)
 - [How it works in 30 seconds](#how-it-works-in-30-seconds)
 - [Install](#install)
 - [Use it](#use-it)
 - [Common scenarios](#common-scenarios)
 - [Bridge prompt reference](#bridge-prompt-reference)
-- [Part B - LLM Wiki (optional companion)](#part-b--llm-wiki-optional-companion)
-- [What is an AI brain (second brain)?](#what-is-an-ai-brain-second-brain)
-- [Vault vs. bridge](#vault-vs-bridge--different-problems-different-tools)
-- [When the vault prompt is worth setting up](#when-the-vault-prompt-is-worth-setting-up)
-- [How to set up a vault](#how-to-set-up-a-vault--step-by-step)
-- [Day-to-day: using your AI brain](#day-to-day-using-your-ai-brain)
-- [Where your second brain meets your project repos](#where-your-second-brain-meets-your-project-repos)
-- [The full workflow - vault + bridge + project](#the-full-workflow--vault--bridge--project)
-- [Vault provider notes](#vault-provider-notes)
-- [Uninstall (vault)](#uninstall-vault)
+- [Related product: LLM Wiki](#related-product-llm-wiki)
 - [Provider support (bridge)](#provider-support-bridge)
 - [MCP integration](#mcp-integration)
 - [MCP usage guide](./docs/mcp-usage.md)
@@ -47,9 +34,9 @@ Use both together if you want full coverage: vault for the *why*, project for th
 
 ---
 
-## Part A — Harness Bridge (core)
+## Harness Bridge core
 
-Harness Bridge is the core feature in this repo. If your goal is reliable handoff between AI sessions while coding in a project repo, stay in Part A.
+Harness Bridge is the core handoff workflow in this repo. If your goal is reliable handoff between AI sessions while coding in a project repo, start here.
 
 ---
 
@@ -133,11 +120,32 @@ When the on-disk bridge isn't enough (stale, missing, or suspect), a separate **
 
 ## Install
 
-You don't install Harness Bridge once; you set it up **per repo**.
+The easiest path is MCP. You configure the server once per agent/editor, then initialize each repo with a normal instruction like "Use Harness Bridge to initialize this repo."
 
-### Option A — one prompt (recommended)
+### Option A — MCP (recommended)
 
-Open your AI coding agent in the target repo. Paste the contents of [`prompts/init.md`](./prompts/init.md) as your first message. The agent will:
+Configure Harness Bridge as a local stdio MCP server:
+
+```bash
+npx -y harness-bridge mcp
+```
+
+You normally do not run that command by hand; add it to your agent's MCP config so the agent starts it when needed. See [`docs/mcp-usage.md`](./docs/mcp-usage.md) and [`providers/mcp.md`](./providers/mcp.md) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup.
+
+After MCP is connected, open your target repo in the agent and say:
+
+```text
+Use Harness Bridge to initialize this repo for handoffs.
+
+Title: <one-line task title>
+Goal: <2-4 sentences describing what we are trying to finish and why>
+```
+
+The agent calls `bridge_init`, creates `.harness/bridge.md`, and can install the maintainer snippet into the right provider instructions file when requested.
+
+### Option B — prompt fallback
+
+Use this when your agent cannot use MCP. Open your AI coding agent in the target repo and paste the contents of [`prompts/init.md`](./prompts/init.md) as your first message. The agent will:
 
 1. Create `.harness/` at the repo root.
 2. Append the maintainer snippet to your provider's instructions file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or create `.cursor/rules/harness-bridge.md`).
@@ -145,7 +153,7 @@ Open your AI coding agent in the target repo. Paste the contents of [`prompts/in
 
 Review the diff. Commit when ready.
 
-### Option B — manual
+### Option C — manual
 
 1. Open [`prompts/maintainer.md`](./prompts/maintainer.md).
 2. Copy everything between `--- begin snippet ---` and `--- end snippet ---`.
@@ -168,13 +176,25 @@ Start a session, give it a task. The agent maintains `.harness/bridge.md` at che
 
 ### 2. End a session (planned or not)
 
-If you're closing the session deliberately and want a clean handoff, paste [`prompts/producer.md`](./prompts/producer.md) as your last message. It's a touch-up pass — verifies nothing slipped past the last checkpoint.
+If you're closing the session deliberately and want a clean handoff, say:
+
+```text
+Produce a Harness Bridge handoff.
+```
+
+With MCP, the agent calls `bridge_produce`. In prompt-only mode, paste [`prompts/producer.md`](./prompts/producer.md). Either way, this is a touch-up pass that verifies nothing slipped past the last checkpoint.
 
 If the session dies unexpectedly, you can skip this. The bridge is already current to the last checkpoint.
 
 ### 3. Resume in a new session
 
-In a fresh session — same provider or a different one — paste [`prompts/consumer.md`](./prompts/consumer.md). The agent will:
+In a fresh session — same provider or a different one — say:
+
+```text
+Consume the Harness Bridge and restate where we are.
+```
+
+With MCP, the agent calls `bridge_consume`. In prompt-only mode, paste [`prompts/consumer.md`](./prompts/consumer.md). The agent will:
 
 1. Read `.harness/bridge.md`.
 2. Run `git status` / `git log` to ground itself in real state.
@@ -190,25 +210,25 @@ The restate-and-wait step is non-negotiable. It's the cheapest way to catch a mi
 
 ### "I want to switch from Claude Code to Codex mid-task."
 
-1. In the source session, paste `prompts/producer.md` to finalize the bridge.
+1. In the source session, say `Produce a Harness Bridge handoff` to finalize the bridge.
 2. Commit. (Or just stage — the file's on disk either way.)
-3. Open Codex in the same repo. Paste `prompts/consumer.md`. Confirm the restate. Continue.
+3. Open Codex in the same repo. Say `Consume the Harness Bridge and restate where we are`. Confirm the restate. Continue.
 
 ### "My session crashed and I didn't run the producer prompt."
 
 If you were using checkpoint cadence (the default), the bridge is already current to the last checkpoint — usually a few minutes ago.
 
-1. Open a new session. Paste `prompts/consumer.md`.
+1. Open a new session. Say `Consume the Harness Bridge and restate where we are` (or paste `prompts/consumer.md` in prompt-only mode).
 2. The restate will show you what state the bridge was in at last checkpoint. If that's close enough to where the session actually died, just continue.
-3. If the bridge is missing the last few minutes, paste `prompts/recover.md` with mode `since` — it tops up the bridge from the dead session's transcript.
+3. If the bridge is missing the last few minutes, ask the agent to run recovery in `since` mode (or paste `prompts/recover.md` in prompt-only mode) — it tops up the bridge from the dead session's transcript.
 
 ### "The bridge is gone (or was never created)."
 
-Use the recovery flow in `full` mode. Paste `prompts/recover.md` with mode `full`. The agent reads the session transcript from disk and reconstructs the bridge from scratch.
+Use the recovery flow in `full` mode. With MCP, ask the agent to recover the bridge from transcript evidence. In prompt-only mode, paste `prompts/recover.md` with mode `full`. The agent reads the session transcript from disk and reconstructs the bridge from scratch.
 
 ### "I don't trust this bridge — did the previous session actually do what it says?"
 
-Paste `prompts/recover.md` with mode `verify`. The agent diffs the bridge against the transcript and reports discrepancies. Read-only — it won't modify the file.
+Ask the agent to verify the bridge against transcript evidence. In prompt-only mode, paste `prompts/recover.md` with mode `verify`. The agent diffs the bridge against the transcript and reports discrepancies. Read-only — it won't modify the file.
 
 ### "I want to slow down bridge updates — this task is exploratory and I don't want the overhead."
 
@@ -233,265 +253,26 @@ Harness Bridge uses six operational prompts:
 | [`prompts/recover.md`](./prompts/recover.md) | Bridge is stale/missing/suspect | Rebuild or verify bridge from transcript |
 | [`prompts/uninstall.md`](./prompts/uninstall.md) | Remove Harness Bridge from a repo | Removes `.harness/` and maintainer snippet |
 
-Optional companion prompt (separate feature):
+Related LLM Wiki prompt:
 
 | Prompt | Feature | Purpose |
 |---|---|---|
-| [`prompts/vault-init.md`](./prompts/vault-init.md) | LLM Wiki | Bootstraps a separate long-lived knowledge vault ("second AI brain") |
+| [`prompts/vault-init.md`](./prompts/vault-init.md) | LLM Wiki | Bootstraps a separate long-lived knowledge vault |
 
 ---
 
-## Part B — LLM Wiki (optional companion)
+## Related product: LLM Wiki
 
-Harness Bridge ships an optional companion prompt — [`prompts/vault-init.md`](./prompts/vault-init.md) — that bootstraps a personal **LLM Wiki**, also called an **AI brain** or **second brain**. It's a markdown-based knowledge base that an AI agent maintains for you over time.
+LLM Wiki is a separate markdown knowledge-base workflow for long-lived research, product thinking, design rationale, and decisions. It uses a vault with `raw/` sources, agent-maintained `wiki/` pages, and a schema in `CLAUDE.md` / `AGENTS.md`.
 
-### What is an AI brain (second brain)?
+Use Harness Bridge when you need a future coding session to resume the current task. Use LLM Wiki when you need future sessions to remember the durable context around many tasks.
 
-A second brain is a structured, interlinked collection of markdown files representing everything you've thought about, read, and decided on across your projects. Unlike a folder of notes, it has *structure*: entities (people, products), concepts (ideas, frameworks), sources (articles, transcripts), and syntheses (analyses, decisions). Pages link to each other; an index summarizes the whole; a log records the timeline of additions and changes.
+| Product | Stores | Lifespan | Path |
+|---|---|---|---|
+| Harness Bridge | Current in-flight task state | Per task / per handoff | `.harness/bridge.md` inside a project repo |
+| LLM Wiki | Research, decisions, design rationale, syntheses | Long-lived | A vault directory with `raw/` and `wiki/` |
 
-The point is **compounding**. Each new source you add is integrated into the existing structure — not just filed. New entity? Linked from every relevant concept page. New decision? Old syntheses that touched the same question are flagged for revision. Contradictions surface explicitly. After 50 sources, the wiki isn't 50 disconnected files — it's a cross-referenced map of your thinking.
-
-### Why it's not just "ChatGPT with file uploads"
-
-| | File-upload RAG | LLM Wiki |
-|---|---|---|
-| What happens when you add a doc | Indexed for retrieval | Read, summarized, integrated into existing pages, cross-referenced |
-| What accumulates between sessions | Nothing — retrieval is per-query | Persistent structured wiki you can browse and search |
-| Where the "thinking" lives | Re-derived from chunks every query | In syntheses, concept pages, decision logs |
-| What you can do after 6 months | Re-upload the docs and re-ask | Read your wiki and pick up where your thinking left off |
-
-RAG retrieves. The LLM Wiki **compiles** and **maintains**. The wiki keeps getting richer every time you add a source or ask a question — the LLM does the bookkeeping that historically killed personal wikis.
-
-### Vault vs. bridge — different problems, different tools
-
-| | LLM Wiki (vault) | Harness Bridge (project) |
-|---|---|---|
-| What it stores | Design rationale, decisions, research, syntheses | Current work-in-progress state of one task |
-| Lifespan | Long-lived — accumulates across projects and years | Per-task — overwritten on each handoff |
-| Maintenance pattern | LLM ingests sources, updates concepts, lints | LLM patches the bridge at checkpoints |
-| Path | A folder of your choice (typically an Obsidian vault) | `.harness/bridge.md` inside each project repo |
-| Audience | You (private second-brain) | You + future AI sessions (and possibly teammates) |
-
-### When the vault prompt is worth setting up
-
-- You're starting a non-trivial project and want design history preserved separately from the codebase.
-- You're doing research that spans weeks or months across many sources.
-- You have (or plan to have) multiple sibling project repos that share intellectual DNA.
-- You want a personal knowledge base that doesn't degrade — because the LLM does the maintenance, not you.
-- You want a reusable design playground you can return to months from now and still pick up exactly where you left off.
-
-### How to set up a vault — step by step
-
-Two paths. **MCP is the recommended one** — deterministic, idempotent, no copy-paste. The prompt path is the fallback for agents that don't support MCP.
-
-#### Path A — MCP (recommended)
-
-1. **Choose a directory.** Either an empty one (standalone vault — e.g. `~/Documents/Knowledge Vault/`, often also your Obsidian vault) or an existing project repo where you want the wiki to live alongside the code.
-2. **Make sure `harness-bridge` is configured as an MCP server** in your agent. See [MCP integration](#mcp-integration) below for the one-line setup.
-3. **Open the directory in your agent and say**:
-
-   ```text
-   Use harness-bridge to initialize an LLM Wiki vault here.
-   Name: "knowledge"      # whatever you want to call it
-   Domain: software project   # optional hint
-   ```
-
-   The agent calls `vault_init`. It auto-detects:
-   - **Empty directory** → writes a standalone vault: `raw/`, `wiki/{entities,concepts,sources,syntheses}/`, `CLAUDE.md`, `AGENTS.md`, `wiki/index.md`, `wiki/log.md`.
-   - **Existing project repo** → creates the folders in place, appends a marker-fenced `<!-- harness-bridge:vault-schema -->` … `<!-- /harness-bridge:vault-schema -->` block to the host `CLAUDE.md` / `AGENTS.md`, leaves everything else untouched. Idempotent — re-running detects the marker and skips.
-4. **Answer the agent's follow-up questions** about domain emphasis (research / software / personal / business / etc.) so it can tailor the schema for your use.
-5. **Review the schema.** Glance through `CLAUDE.md` (or the appended block, in the co-located case) — it's the schema future sessions follow. Adjust if anything doesn't match how you want to work.
-6. **(Optional) `git init`** the vault if you want history.
-
-That's it. You also get `vault_status` — call it any time to see scaffold state and pending ingests (files in `raw/` with no matching `wiki/sources/<slug>.md` yet). Useful as a backlog view for devs / leads / PMs. See [`docs/mcp-usage.md`](./docs/mcp-usage.md#initialize-a-vault-llm-wiki--second-brain) for the full walkthrough.
-
-#### Path B — Prompt-only fallback (if your agent doesn't support MCP)
-
-1. **Choose a directory** as above.
-2. **Open it in your AI agent** (Claude Code, Codex, Gemini CLI, Cursor, etc.).
-3. **Paste the contents of [`prompts/vault-init.md`](./prompts/vault-init.md)** as your first message.
-4. **Answer the agent's questions** about domain. The agent creates folders and writes `CLAUDE.md` / `AGENTS.md` / `wiki/index.md` / `wiki/log.md` itself.
-5. **Review the scaffold** and (optionally) `git init`.
-
-From here on, every future session in this directory follows the schema automatically — `CLAUDE.md` is loaded on session start by whichever provider you're using.
-
-### Day-to-day: using your AI brain
-
-Once the vault exists, you **use it as a thinking partner**. You ask it questions, you push new sources into it, and you let it find connections you'd otherwise miss. The agent does the bookkeeping invisibly; your interaction stays at the level of ideas.
-
-You interact through three operations defined in the schema. **Query** is the one you'll use most.
-
-#### Query — ask your brain a question
-
-This is the main interface. Once the vault has content, you can ask it anything that touches what you've thought about, read, or decided. The agent reads `wiki/index.md` to locate relevant pages, drills in, follows `[[wikilinks]]`, and answers with citations to the underlying sources.
-
-**Examples of real queries**:
-
-- *"What did I conclude about token-bucket vs leaky-bucket rate limiting?"* → Agent pulls the relevant concept and synthesis pages, gives you the decision and why.
-- *"Summarize everything I know about Acme Corp."* → Agent reads the entity page plus every source that mentions them, returns a current briefing.
-- *"What are all the open questions across my active feature designs?"* → Agent scans `wiki/syntheses/` for "Open questions" sections, returns the list.
-- *"I'm about to start the auth rework. What design context do I already have?"* → Agent surfaces relevant concepts, prior decisions, abandoned alternatives.
-- *"Three months ago I was reading about X. What did I take away from it?"* → Agent finds the source page and any concept pages it informed.
-- *"What contradicts what I just claimed about Y?"* → Agent looks for opposing claims in older sources, surfaces the tension.
-
-If the answer itself is substantive — a comparison, an analysis, a novel connection between two concepts — the agent offers to **file it back** as a new `wiki/syntheses/<slug>.md`. This is how the wiki compounds: your explorations turn into permanent additions to your brain rather than vanishing into chat history.
-
-**Tip**: ask the wiki things before you start any non-trivial work. Five minutes of querying your past thinking saves hours of redoing it.
-
-#### Ingest — feed your brain a new source
-
-You curate sources; the agent integrates them. Sources can be anything: an article you read, a podcast transcript, a meeting note, a paper, a user-interview transcript, feedback from a customer, a half-formed idea you typed out.
-
-1. **Drop the source** into `raw/`. Use the filename to encode what it is (e.g. `raw/2026-05-22-user-interview-acme.md`, `raw/paper-token-bucket-rate-limiting.md`). Obsidian Web Clipper is great for grabbing web articles as markdown.
-2. **Tell the agent**: `ingest raw/<filename>`. The agent reads it end-to-end, then **discusses key takeaways with you before writing** — this is your chance to guide what to emphasize and to flag anything that contradicts what you already believe.
-3. **Confirm or guide**: say "proceed" or "emphasize X, downplay Y, then proceed."
-4. **The agent does the rest**: writes `wiki/sources/<slug>.md`, updates relevant entity and concept pages, creates stubs for important new mentions, updates the index, appends to the log. A single source typically touches 5–15 pages.
-5. **Browse the result.** Open Obsidian (or your editor of choice), follow the new links, glance at the graph view to see the wiki's shape change.
-
-**Tip**: ingest one source at a time and stay engaged. The conversation about takeaways is where the actual thinking happens — batch ingestion is faster but you lose the dialog.
-
-#### Lint — keep your brain healthy
-
-Periodically (every few weeks, or whenever you sense drift), say `lint`. The agent audits the wiki and reports:
-
-- Contradictions between pages
-- Stale claims newer sources have superseded
-- Orphan pages with no inbound links
-- Important concepts mentioned but lacking their own page
-- Missing cross-references
-- Gaps where a web search or a new source would help
-- Suggested next questions worth investigating
-
-Lint isn't maintenance you "have to" do — it's a directed exploration prompt. The agent telling you "you keep mentioning Concept X but never wrote a page for it" or "Source A and Source B disagree about Y" is genuinely useful — it surfaces gaps in your thinking, not just your filing.
-
-### A day in the life
-
-What using a second brain actually looks like, over a typical session:
-
-```
-You:    Read this article and integrate it.
-        [drops raw/article-multi-tenant-isolation.md]
-
-Agent:  Read it. Three things worth flagging before I write:
-        • It contradicts your existing claim in concepts/tenant-isolation.md
-          about row-level vs schema-level isolation
-        • It introduces a new pattern ("cell architecture") that doesn't
-          have a concept page yet
-        • The author cites your colleague's blog post from 2024 which
-          you've never ingested — worth grabbing too?
-        Proceed?
-
-You:    Yes — and grab the colleague's post when you find it.
-
-Agent:  [ingests both; writes 2 source pages, creates concepts/cell-architecture.md,
-         updates concepts/tenant-isolation.md with a contradictions section,
-         updates index and log. 11 pages touched.]
-
-You:    Given everything I now know, what's the right design for our
-        multi-tenant rewrite?
-
-Agent:  [reads relevant concept + synthesis pages]
-        Here's the synthesis I'd propose [...]
-        Want me to file this as wiki/syntheses/2026-05-22-multi-tenant-design.md?
-
-You:    Yes. And tell me what's still uncertain.
-
-Agent:  [files the synthesis; lists open questions]
-        Open questions remaining:
-        • [...]
-        • [...]
-        Suggest ingesting the AWS cell-architecture whitepaper next; it
-        addresses two of these directly.
-
-You:    Find and ingest it.
-
-[and so on]
-```
-
-Every step compounds. The article you read this afternoon is now connected to a decision you made last month. The synthesis you produced today is a `[[wikilink]]` away from any future query. You can come back in three weeks and pick up exactly where this thinking left off.
-
-### Where your second brain meets your project repos
-
-Once a synthesis in `wiki/syntheses/` is approved as a design, the implementation happens in a **sibling project repo** (separate `git init`). The vault tracks the *why*; the project tracks the *what*. Use Harness Bridge in the project to track in-flight implementation work. The vault's `CLAUDE.md` lists each paired project in a **Paired projects** table, so future sessions know where to find them.
-
-This way: when you sit down months later and say "let's continue Project X," the agent reads the vault's `CLAUDE.md`, finds the project path, switches context, reads `.harness/bridge.md` in the project, restates where you were, and you're back at full speed in under a minute.
-
-### What to ingest (and what to skip)
-
-Worth ingesting:
-- ✅ Articles and papers you actually read carefully
-- ✅ Transcripts of important meetings or user interviews
-- ✅ Your own thinking when you have a substantive insight (write it as a `raw/` note)
-- ✅ Decision documents, design specs, project briefs
-- ✅ Bug reports and feedback patterns that reveal something about your product
-
-Probably skip:
-- ❌ Things you skimmed and don't care about
-- ❌ Reference material that's already well-indexed elsewhere (you don't need to ingest the React docs)
-- ❌ Truly ephemeral notes (shopping lists, daily journal entries unless your vault is a personal one)
-- ❌ Auto-generated content (build logs, CI output)
-
-**The rule**: if you'd want a future-you (or a future session) to remember this in 6 months, ingest it.
-
-### The full workflow — vault + bridge + project
-
-Here's how the three pieces combine for a new project:
-
-```
-Step 1 — Vault (design phase)
-   Drop seed idea into raw/
-   Run `ingest`
-   Brainstorm with agent → wiki/syntheses/<feature>-design.md
-
-Step 2 — Project repo (greenfield)
-   git init a sibling repo to the vault
-   Paste prompts/init.md (Harness Bridge) inside the project
-   → maintainer snippet appended to CLAUDE.md / AGENTS.md / etc.
-   → .harness/bridge.md scaffolded
-
-Step 3 — Vault (register the project)
-   Add a row to the vault's Paired projects table in CLAUDE.md
-   → future sessions automatically know where the project lives
-
-Step 4 — Build
-   Work in the project repo; the agent maintains .harness/bridge.md at checkpoints
-   When the session dies / you switch providers / you context-switch:
-      paste prompts/consumer.md in the new session
-      → resumes exactly where the last one left off
-
-Step 5 — Loop
-   New decisions or learnings → also reflect into the vault
-      (update relevant concept pages, add new syntheses)
-   New features → start at Step 1 again
-```
-
-The vault and project are **independent git repos**. The vault stays private (it holds your unfiltered thinking). The project ships publicly (it's the polished deliverable).
-
-### What stays in the vault vs. what ships in the project
-
-| Goes in the vault | Ships in the project repo |
-|---|---|
-| Why you chose Approach A over B | The README explaining what Approach A is |
-| The decision log for v1 → v2 schema migration | The `CHANGELOG.md` summary |
-| Half-formed ideas you might come back to | Code, tests, docs that actually work |
-| User feedback patterns, raw interviews | Distilled docs informed by the feedback |
-| Competitive analysis, research notes | Nothing public about competitors |
-
-A useful test: if a contributor opened a PR, what would they need vs. what would feel weird seeing? PR-relevant artifacts go in the project. Your private thinking goes in the vault.
-
-### Vault provider notes
-
-The vault prompt works in any AI agent that can read and edit local files: Claude Code, Codex, Cursor, Gemini CLI, and others. Once the agent writes `CLAUDE.md` during setup, every future session automatically loads it as the schema. For agents that use a different instructions file (`AGENTS.md`, `GEMINI.md`), the setup also writes a one-line pointer pointing to `CLAUDE.md` so all providers see the same schema.
-
-### Uninstall (vault)
-
-The vault is just a folder of markdown files. To "uninstall," delete the folder (or remove it from your Obsidian vaults list). Nothing's registered globally; nothing leaves the directory.
-
----
-
-## Back to Harness Bridge
-
-The sections below return to bridge-specific operational details.
+Read the LLM Wiki guide in [`docs/llm-wiki.md`](./docs/llm-wiki.md).
 
 ## Provider support (bridge)
 
@@ -527,7 +308,7 @@ node /absolute/path/to/harness-bridge/dist/cli.js mcp
 
 The MCP server exposes deterministic local tools for bridge status, init, checkpoint, produce, consume, recover, and validation while keeping `.harness/bridge.md` as the source of truth. It also exposes the canonical `prompts/*.md` files as MCP prompts/resources.
 
-The same server also ships the LLM Wiki vault tools — `vault_init` (scaffold the folder structure and schema) and `vault_status` (report scaffold state and pending ingests in `raw/`). Works in an empty directory (standalone vault) or alongside an existing project repo (appends a marker-fenced vault schema to the host `CLAUDE.md` / `AGENTS.md`). See [`docs/mcp-usage.md`](./docs/mcp-usage.md#initialize-a-vault-llm-wiki--second-brain) for the dev/PM/agent workflow walkthrough.
+The same server also exposes the separate LLM Wiki tools — `vault_init` and `vault_status`. See [`docs/llm-wiki.md`](./docs/llm-wiki.md) for LLM Wiki setup and daily usage.
 
 See [`providers/mcp.md`](./providers/mcp.md), [`docs/mcp-usage.md`](./docs/mcp-usage.md), and [`templates/`](./templates/) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup snippets.
 
@@ -586,14 +367,14 @@ Lineage from the original concept note. The name is preserved through v1; we may
 **Harness Bridge isn't:**
 - A retrieval system. It doesn't index your codebase or build embeddings.
 - An agent memory layer. It captures one task's state, not your long-term knowledge.
-- A CLI or daemon. Nothing runs in the background.
+- A hosted service or background daemon. The optional CLI/MCP server runs locally when invoked by you or your agent.
 - A replacement for `CLAUDE.md` / `AGENTS.md`. It appends a section to those files; it doesn't take them over.
 
 ---
 
 ## Uninstall (bridge)
 
-Paste [`prompts/uninstall.md`](./prompts/uninstall.md) into a session. It removes both install artifacts:
+Use [`prompts/uninstall.md`](./prompts/uninstall.md) when you want to remove Harness Bridge from a repo. It removes both install artifacts:
 
 1. The `.harness/` directory and `bridge.md`.
 2. The `## Harness Bridge — keep .harness/bridge.md current` section from your provider's instructions file (or deletes `.cursor/rules/harness-bridge.md`).
