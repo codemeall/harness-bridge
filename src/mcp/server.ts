@@ -47,6 +47,32 @@ function jsonResponse(value: unknown) {
   return textResponse(JSON.stringify(value, null, 2));
 }
 
+function targetCwd(defaultCwd: string, cwd?: string): string {
+  return cwd ? path.resolve(cwd) : defaultCwd;
+}
+
+function hasBridgePatch(args: {
+  title?: string;
+  goal?: string;
+  plan?: string;
+  nextAction?: string;
+  decisionsToAppend?: string[];
+  openQuestions?: string;
+  filesTouched?: string;
+  notes?: string;
+}): boolean {
+  return Boolean(
+    args.title?.trim() ||
+      args.goal?.trim() ||
+      args.plan?.trim() ||
+      args.nextAction?.trim() ||
+      (args.decisionsToAppend?.some((item) => item.trim().length > 0) ?? false) ||
+      args.openQuestions?.trim() ||
+      args.filesTouched?.trim() ||
+      args.notes?.trim()
+  );
+}
+
 function readPrompt(name: PromptName): string {
   return fs.readFileSync(new URL(PROMPT_FILES[name], PROMPT_DIR), "utf8");
 }
@@ -148,18 +174,22 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
   server.tool(
     "bridge_status",
     "Read .harness/bridge.md, validate it, and compare frontmatter against current git state.",
-    {},
-    async () => jsonResponse(getStatus(cwd))
+    {
+      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd.")
+    },
+    async ({ cwd: requestedCwd }) => jsonResponse(getStatus(targetCwd(cwd, requestedCwd)))
   );
 
   server.tool(
     "bridge_validate",
     "Validate a bridge markdown string, or validate the current repo bridge when markdown is omitted.",
     {
-      markdown: z.string().optional()
+      markdown: z.string().optional(),
+      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd.")
     },
-    async ({ markdown }) => {
-      const file = bridgePath(cwd);
+    async ({ markdown, cwd: requestedCwd }) => {
+      const resolvedCwd = targetCwd(cwd, requestedCwd);
+      const file = bridgePath(resolvedCwd);
       const target = markdown ?? (fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "");
       if (!target) {
         return jsonResponse({ valid: false, errors: ["No bridge markdown provided and no repo bridge exists."], warnings: [] });
@@ -178,18 +208,20 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
       nextAction: z.string().optional().describe("Imperative next action."),
       generatedBy: z.string().default("mcp:harness-bridge"),
       cadence: z.enum(["checkpoint", "lazy", "aggressive"]).default("checkpoint"),
+      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd."),
       installInstructionsFor: z
         .enum(["claude-code", "codex", "gemini-cli", "cursor"])
         .optional()
         .describe("Optional provider instruction file to update with the canonical maintainer snippet from prompts/maintainer.md.")
     },
-    async ({ title, goal, plan, nextAction, generatedBy, cadence, installInstructionsFor }) => {
-      const doc = initBridge({ cwd, title, goal, plan, nextAction, generatedBy, cadence });
-      const instructionResult = installInstructionsFor ? installProviderInstructions(cwd, installInstructionsFor) : "";
+    async ({ title, goal, plan, nextAction, generatedBy, cadence, cwd: requestedCwd, installInstructionsFor }) => {
+      const resolvedCwd = targetCwd(cwd, requestedCwd);
+      const doc = initBridge({ cwd: resolvedCwd, title, goal, plan, nextAction, generatedBy, cadence });
+      const instructionResult = installInstructionsFor ? installProviderInstructions(resolvedCwd, installInstructionsFor) : "";
       return textResponse(
         [
           instructionResult,
-          "Initialized bridge using the prompts/init.md schema and prompts/maintainer.md template.",
+          `Initialized bridge at ${bridgePath(resolvedCwd)} using the prompts/init.md schema and prompts/maintainer.md template.`,
           renderBridge(doc)
         ]
           .filter(Boolean)
@@ -211,17 +243,19 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
       filesTouched: z.string().optional(),
       notes: z.string().optional(),
       generatedBy: z.string().default("mcp:harness-bridge"),
+      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd."),
       cadence: z.enum(["checkpoint", "lazy", "aggressive"]).optional()
     },
     async (args) => {
-      const doc = checkpointBridge({ cwd, ...args });
-      return textResponse(renderBridge(doc));
+      const resolvedCwd = targetCwd(cwd, args.cwd);
+      const doc = checkpointBridge({ ...args, cwd: resolvedCwd });
+      return textResponse([`Updated bridge at ${bridgePath(resolvedCwd)}.`, renderBridge(doc)].join("\n\n"));
     }
   );
 
   server.tool(
     "bridge_produce",
-    "Finalize the bridge before a deliberate handoff. Same patch behavior as bridge_checkpoint, with handoff-oriented wording.",
+    "Finalize the bridge before a deliberate handoff. Provide the current session summary fields, or set confirmNoChanges when the bridge is already current.",
     {
       title: z.string().optional(),
       goal: z.string().optional(),
@@ -232,19 +266,32 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
       filesTouched: z.string().optional(),
       notes: z.string().optional(),
       generatedBy: z.string().default("mcp:harness-bridge"),
+      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd."),
+      confirmNoChanges: z
+        .boolean()
+        .default(false)
+        .describe("Set true only after reviewing this session and confirming the existing bridge needs no content changes."),
       cadence: z.enum(["checkpoint", "lazy", "aggressive"]).optional()
     },
     async (args) => {
-      const doc = checkpointBridge({ cwd, ...args });
-      return textResponse(renderBridge(doc));
+      if (!args.confirmNoChanges && !hasBridgePatch(args)) {
+        throw new Error(
+          "bridge_produce requires handoff content. Provide updated plan/nextAction/filesTouched/etc., or set confirmNoChanges=true after verifying the existing bridge is already current."
+        );
+      }
+      const resolvedCwd = targetCwd(cwd, args.cwd);
+      const doc = checkpointBridge({ ...args, cwd: resolvedCwd });
+      return textResponse([`Produced handoff bridge at ${bridgePath(resolvedCwd)}.`, renderBridge(doc)].join("\n\n"));
     }
   );
 
   server.tool(
     "bridge_consume",
     "Return grounded bridge state for a fresh session. The caller must restate it and wait for user confirmation before acting.",
-    {},
-    async () => textResponse(summarizeForConsume(cwd))
+    {
+      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd.")
+    },
+    async ({ cwd: requestedCwd }) => textResponse(summarizeForConsume(targetCwd(cwd, requestedCwd)))
   );
 
   server.tool(
@@ -257,9 +304,10 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
         .optional()
         .describe("Complete recovered bridge markdown for full/since modes, synthesized by the agent from transcript evidence."),
       transcriptText: z.string().optional().describe("Optional transcript text to redact and inspect in verify mode."),
+      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd."),
       write: z.boolean().default(false).describe("Set true only after user confirmation.")
     },
-    async ({ mode, recoveredBridgeMarkdown, transcriptText, write }) => {
+    async ({ mode, recoveredBridgeMarkdown, transcriptText, cwd: requestedCwd, write }) => {
       if (mode === "verify") {
         return textResponse(redactSecrets(transcriptText ?? "No transcript text provided. Report discrepancies without modifying files."));
       }
@@ -280,8 +328,9 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
         return jsonResponse({ written: false, validation, preview: redactSecrets(recoveredBridgeMarkdown) });
       }
 
-      writeBridge(cwd, parseBridge(recoveredBridgeMarkdown));
-      return jsonResponse({ written: true, validation });
+      const resolvedCwd = targetCwd(cwd, requestedCwd);
+      writeBridge(resolvedCwd, parseBridge(recoveredBridgeMarkdown));
+      return jsonResponse({ written: true, path: bridgePath(resolvedCwd), validation });
     }
   );
 

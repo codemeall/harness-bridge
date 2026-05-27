@@ -33,6 +33,10 @@ You are working in a repo that uses **Harness Bridge** for cross-session continu
 
 7. **Don't commit on the user's behalf.** Stage edits to `.harness/bridge.md`; let the user commit.
 
+8. **Verify bridge tool writes.** When using MCP, pass the absolute workspace path as `cwd` when available and report the returned `.harness/bridge.md` path after write tools. Never say a handoff was produced unless the tool call succeeded.
+
+9. **Producer handoffs need content.** On "Produce a Harness Bridge handoff," review the session and pass the updated handoff fields to `bridge_produce` (`plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions). If nothing changed since the previous checkpoint, set `confirmNoChanges` only after verifying the existing bridge is already complete.
+
 ### Cadence override
 
 This repo uses cadence: **checkpoint** (default).

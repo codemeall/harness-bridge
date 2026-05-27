@@ -17,7 +17,7 @@ The MCP server should not parse natural-language prompts as its execution engine
 |---|---|---|
 | `prompts/init.md` | `bridge_init` plus optional `installInstructionsFor` | Creates `.harness/bridge.md` from git state. Can install the maintainer snippet into `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `.cursor/rules/harness-bridge.md`. |
 | `prompts/maintainer.md` | `bridge_checkpoint`, `bridge_produce`, prompt/resource exposure | Checkpoint updates preserve unknown frontmatter, append decisions, bump git state, validate schema, and refuse credential-shaped content. Cadence judgment still belongs to the agent. |
-| `prompts/producer.md` | `bridge_produce` | Performs the mechanical final write. The agent still reviews session history, sharpens `Next action`, and decides what changed since `last_updated`. |
+| `prompts/producer.md` | `bridge_produce` | Performs the mechanical final write. The agent still reviews session history, sharpens `Next action`, and decides what changed since `last_updated`; the tool rejects empty no-op produce calls unless `confirmNoChanges` is explicit. |
 | `prompts/consumer.md` | `bridge_consume`, `bridge_status` | Reads bridge state, compares git state, includes git-log/file grounding, and returns the explicit confirmation gate. The agent must restate and wait before editing. |
 | `prompts/recover.md` | `bridge_recover` plus prompt/resource exposure | Validates and writes recovered bridge markdown after confirmation. Transcript interpretation remains agent work because provider transcript formats differ. |
 | `prompts/uninstall.md` | prompt/resource exposure only | Full uninstall is still prompt/manual for now; no destructive MCP uninstall tool exists yet. |
@@ -26,8 +26,9 @@ The MCP server should not parse natural-language prompts as its execution engine
 ## Current limitations
 
 - `bridge_recover` does not automatically locate and parse provider transcripts. It supports validated writes from agent-synthesized recovered markdown.
-- `bridge_produce` cannot know what happened verbally since `last_updated`; the agent must provide the updated plan, decisions, files, and next action.
+- `bridge_produce` cannot know what happened verbally since `last_updated`; the agent must provide the updated plan, decisions, files, and next action. It fails on an empty call unless the agent sets `confirmNoChanges` after verifying the bridge is already current.
 - `bridge_checkpoint` does not decide cadence on its own; the agent decides when a checkpoint is meaningful.
+- MCP server process cwd can differ from the editor workspace in some clients, so bridge tools accept optional `cwd`; agents should pass the absolute workspace path when available.
 - Uninstall remains prompt-driven to avoid broad destructive file edits from MCP.
 
 ## Expected user behavior

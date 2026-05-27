@@ -25,6 +25,10 @@ After setup, your agent can use these tools:
 | `bridge_recover` | Helps recover a stale or missing bridge from transcript evidence. |
 | `bridge_validate` | Validates bridge markdown against the schema. |
 
+All bridge tools accept an optional `cwd` argument. Agents should pass the absolute workspace path when the MCP client exposes it, especially in editors that can start stdio MCP servers from a different process directory than the project. Write tools return the absolute `.harness/bridge.md` path they updated.
+
+`bridge_produce` intentionally rejects an empty no-op call. The agent must provide the current handoff fields (`plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions), or set `confirmNoChanges: true` only after checking that the existing bridge already contains the complete handoff.
+
 The same MCP server also exposes LLM Wiki tools (`vault_init`, `vault_status`) for the separate knowledge-base workflow. See [`docs/llm-wiki.md`](./llm-wiki.md).
 
 The server also exposes these prompt resources for agents that want the canonical prompt text:
@@ -283,8 +287,10 @@ Produce a Harness Bridge handoff.
 Expected result:
 
 - Agent calls `bridge_produce`.
+- Agent passes the current session's handoff content, or explicitly confirms no content changes were needed.
 - `Next action` is specific and executable.
 - Git state in frontmatter is updated.
+- The tool response includes the absolute `.harness/bridge.md` path that was written.
 - The bridge is ready for the next session.
 
 ### 4. Resume elsewhere
