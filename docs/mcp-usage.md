@@ -24,6 +24,8 @@ After setup, your agent can use these tools:
 | `bridge_consume` | Reads the bridge in a new session and returns the current state. |
 | `bridge_recover` | Helps recover a stale or missing bridge from transcript evidence. |
 | `bridge_validate` | Validates bridge markdown against the schema. |
+| `vault_init` | Scaffolds an LLM Wiki / second-brain vault (folders + `CLAUDE.md` + `AGENTS.md` + `wiki/index.md` + `wiki/log.md`). |
+| `vault_status` | Reports vault scaffold state and lists files in `raw/` that have no matching `wiki/sources/<slug>.md`. |
 
 The server also exposes these prompt resources for agents that want the canonical prompt text:
 
@@ -301,6 +303,78 @@ Expected result:
 
 After confirming, the new agent continues from the bridge and keeps updating it at checkpoints.
 
+## Initialize a vault (LLM Wiki / second brain)
+
+The vault is a long-lived, agent-maintained knowledge base separate from the bridge. The bridge tracks in-flight work for one project; the vault accumulates design rationale, research, and decisions across projects.
+
+### Two install scenarios
+
+| Scenario | When to use | What changes |
+|---|---|---|
+| **Standalone vault** | Fresh directory chosen specifically as a vault (e.g. `~/Documents/Knowledge Vault/`, often opened as an Obsidian vault). | All files written fresh. |
+| **Co-located with a project** | You want the wiki to live alongside an existing project repo. | Folders created in-place. Vault schema is appended to the host project's `CLAUDE.md` / `AGENTS.md` inside `<!-- harness-bridge:vault-schema -->` markers — host content above the marker is untouched. |
+
+The tool auto-detects which scenario applies. No mode flag needed.
+
+### 1. Scaffold the vault
+
+In an MCP-capable agent, open the target directory and say:
+
+```text
+Use harness-bridge to initialize an LLM Wiki vault here.
+Name: "knowledge"
+Domain: software project   # optional hint
+```
+
+The agent calls `vault_init`. On disk you get:
+
+- `raw/` and `raw/assets/` — where you drop sources
+- `wiki/entities/`, `wiki/concepts/`, `wiki/sources/`, `wiki/syntheses/` — agent-maintained
+- `CLAUDE.md` and `AGENTS.md` — the schema the agent will follow
+- `wiki/index.md` and `wiki/log.md` — catalog and append-only history
+
+### 2. Use the vault
+
+**Anyone (developer, lead, PM, agent) can drop source material into `raw/`** — PRDs, ADRs, RFCs, meeting transcripts, articles, PDFs, screenshots into `raw/assets/`, etc. No tooling required; they're plain files.
+
+Then ask the agent to ingest:
+
+```text
+ingest raw/prd-checkout-v2.md
+```
+
+The agent (following the schema now installed in `CLAUDE.md`) reads the source, surfaces key takeaways with you for confirmation, then writes `wiki/sources/prd-checkout-v2.md`, updates or creates relevant `wiki/entities/` and `wiki/concepts/` pages, refreshes `wiki/index.md`, and appends an entry to `wiki/log.md`. The wiki compounds across ingests.
+
+Later, ask the wiki anything:
+
+```text
+What did we decide about guest checkout?
+```
+
+The agent reads `wiki/index.md`, drills into relevant pages, follows `[[wikilinks]]`, and answers with inline citations back to the source pages. If the answer is a substantive synthesis, the agent offers to file it as `wiki/syntheses/<slug>.md` so the insight is reusable.
+
+### 3. Check vault state
+
+```text
+What's the vault status?
+```
+
+The agent calls `vault_status`. It reports which expected folders/files exist, whether the CLAUDE.md carries the vault marker, and **which files in `raw/` are still waiting to be ingested** (no matching `wiki/sources/<slug>.md` exists yet). Useful for leads/PMs who want a backlog view.
+
+### Who does what
+
+| Action | Who does it |
+|---|---|
+| Scaffold folders + schema | `vault_init` MCP tool (deterministic) |
+| Check vault state and pending ingests | `vault_status` MCP tool (deterministic) |
+| Drop sources into `raw/` | Human or agent — plain file write |
+| Read + summarize a source, write `wiki/sources/<slug>.md` | Agent's LLM, guided by `CLAUDE.md` |
+| Update entities/concepts/index/log | Agent's LLM, guided by `CLAUDE.md` |
+| Answer queries with citations | Agent's LLM, guided by `CLAUDE.md` |
+| Lint / health-check | Agent's LLM, guided by `CLAUDE.md` |
+
+Ingest, query, and lint are deliberately LLM-driven, not deterministic tools — they need judgment about what's important and what contradicts existing claims. The schema in `CLAUDE.md` is the interface.
+
 ## CLI fallback
 
 The package includes a small CLI for local checks.
@@ -313,6 +387,8 @@ harness-bridge validate .harness/bridge.md
 harness-bridge consume
 harness-bridge init --title "Add rate limits" --goal "Add per-token rate limiting to public API endpoints."
 harness-bridge checkpoint --next-action "Run npm test."
+harness-bridge vault-init --name "knowledge" [--domain "software project"] [--force]
+harness-bridge vault-status
 ```
 
 If running from a Git checkout:

@@ -282,14 +282,38 @@ RAG retrieves. The LLM Wiki **compiles** and **maintains**. The wiki keeps getti
 
 ### How to set up a vault — step by step
 
-1. **Choose a directory.** Anywhere on disk. If you use Obsidian, this directory will also be your Obsidian vault — you get the graph view and links for free. Example: `~/Documents/Knowledge Vault/`.
-2. **Open the directory in your AI agent.** `cd` into it and start Claude Code, Codex, Gemini CLI, or open it as a Cursor workspace.
-3. **Paste the contents of [`prompts/vault-init.md`](./prompts/vault-init.md)** as your first message to the agent.
-4. **Answer the agent's questions.** It will ask what domain the vault is for (research, software, personal, business, learning, etc.) so it can tailor the schema. Be specific — the schema written here defines how the vault works going forward.
-5. **Review the scaffold.** The agent creates `raw/`, `wiki/{entities,concepts,sources,syntheses}/`, `CLAUDE.md`, `AGENTS.md`, `wiki/index.md`, and `wiki/log.md`. Glance through `CLAUDE.md` — it's the schema future sessions will follow. Adjust if anything doesn't match how you actually want to work.
-6. **(Optional) `git init`** the vault if you want history. The vault is just markdown files; everything diffs and branches cleanly.
+Two paths. **MCP is the recommended one** — deterministic, idempotent, no copy-paste. The prompt path is the fallback for agents that don't support MCP.
 
-That's the entire setup. From here on, every future session in this directory follows the schema automatically — `CLAUDE.md` is loaded on session start by whichever provider you're using.
+#### Path A — MCP (recommended)
+
+1. **Choose a directory.** Either an empty one (standalone vault — e.g. `~/Documents/Knowledge Vault/`, often also your Obsidian vault) or an existing project repo where you want the wiki to live alongside the code.
+2. **Make sure `harness-bridge` is configured as an MCP server** in your agent. See [MCP integration](#mcp-integration) below for the one-line setup.
+3. **Open the directory in your agent and say**:
+
+   ```text
+   Use harness-bridge to initialize an LLM Wiki vault here.
+   Name: "knowledge"      # whatever you want to call it
+   Domain: software project   # optional hint
+   ```
+
+   The agent calls `vault_init`. It auto-detects:
+   - **Empty directory** → writes a standalone vault: `raw/`, `wiki/{entities,concepts,sources,syntheses}/`, `CLAUDE.md`, `AGENTS.md`, `wiki/index.md`, `wiki/log.md`.
+   - **Existing project repo** → creates the folders in place, appends a marker-fenced `<!-- harness-bridge:vault-schema -->` … `<!-- /harness-bridge:vault-schema -->` block to the host `CLAUDE.md` / `AGENTS.md`, leaves everything else untouched. Idempotent — re-running detects the marker and skips.
+4. **Answer the agent's follow-up questions** about domain emphasis (research / software / personal / business / etc.) so it can tailor the schema for your use.
+5. **Review the schema.** Glance through `CLAUDE.md` (or the appended block, in the co-located case) — it's the schema future sessions follow. Adjust if anything doesn't match how you want to work.
+6. **(Optional) `git init`** the vault if you want history.
+
+That's it. You also get `vault_status` — call it any time to see scaffold state and pending ingests (files in `raw/` with no matching `wiki/sources/<slug>.md` yet). Useful as a backlog view for devs / leads / PMs. See [`docs/mcp-usage.md`](./docs/mcp-usage.md#initialize-a-vault-llm-wiki--second-brain) for the full walkthrough.
+
+#### Path B — Prompt-only fallback (if your agent doesn't support MCP)
+
+1. **Choose a directory** as above.
+2. **Open it in your AI agent** (Claude Code, Codex, Gemini CLI, Cursor, etc.).
+3. **Paste the contents of [`prompts/vault-init.md`](./prompts/vault-init.md)** as your first message.
+4. **Answer the agent's questions** about domain. The agent creates folders and writes `CLAUDE.md` / `AGENTS.md` / `wiki/index.md` / `wiki/log.md` itself.
+5. **Review the scaffold** and (optionally) `git init`.
+
+From here on, every future session in this directory follows the schema automatically — `CLAUDE.md` is loaded on session start by whichever provider you're using.
 
 ### Day-to-day: using your AI brain
 
@@ -501,7 +525,11 @@ npm run build
 node /absolute/path/to/harness-bridge/dist/cli.js mcp
 ```
 
-The MCP server exposes deterministic local tools for bridge status, init, checkpoint, produce, consume, recover, and validation while keeping `.harness/bridge.md` as the source of truth. It also exposes the canonical `prompts/*.md` files as MCP prompts/resources. See [`providers/mcp.md`](./providers/mcp.md), [`docs/mcp-usage.md`](./docs/mcp-usage.md), and [`templates/`](./templates/) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup snippets.
+The MCP server exposes deterministic local tools for bridge status, init, checkpoint, produce, consume, recover, and validation while keeping `.harness/bridge.md` as the source of truth. It also exposes the canonical `prompts/*.md` files as MCP prompts/resources.
+
+The same server also ships the LLM Wiki vault tools — `vault_init` (scaffold the folder structure and schema) and `vault_status` (report scaffold state and pending ingests in `raw/`). Works in an empty directory (standalone vault) or alongside an existing project repo (appends a marker-fenced vault schema to the host `CLAUDE.md` / `AGENTS.md`). See [`docs/mcp-usage.md`](./docs/mcp-usage.md#initialize-a-vault-llm-wiki--second-brain) for the dev/PM/agent workflow walkthrough.
+
+See [`providers/mcp.md`](./providers/mcp.md), [`docs/mcp-usage.md`](./docs/mcp-usage.md), and [`templates/`](./templates/) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup snippets.
 
 For end-to-end setup and daily workflow examples, read [`docs/mcp-usage.md`](./docs/mcp-usage.md).
 

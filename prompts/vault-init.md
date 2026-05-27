@@ -6,6 +6,8 @@ This is the companion to the Harness Bridge workflow. The bridge handles **in-se
 
 Paste this entire prompt as your first message to a fresh AI agent session, opened in the directory you want to become your vault.
 
+> **MCP-capable agents:** if `harness-bridge` is configured as an MCP server, call the `vault_init` tool to create the folders and schema deterministically instead of writing them by hand at step 2 below. The tool auto-detects whether the directory is empty (writes a standalone vault) or already holds a project (appends a marker-fenced vault schema to the host `CLAUDE.md` / `AGENTS.md`). The rest of this prompt — domain discussion, first ingest demo, schema confirmation — still applies.
+
 ---
 
 You are about to set up an **LLM Wiki / second brain** in the current working directory. Read this brief, then guide me step by step through the setup.

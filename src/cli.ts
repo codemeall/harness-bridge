@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import { checkpointBridge, getStatus, initBridge, renderBridge, summarizeForConsume, validateBridge } from "./core/bridge.js";
+import { initVault, vaultStatus } from "./core/vault.js";
 import { runMcpServer } from "./mcp/server.js";
 
 function usage(): never {
@@ -11,6 +12,8 @@ function usage(): never {
   harness-bridge consume
   harness-bridge init --title <title> --goal <goal>
   harness-bridge checkpoint [--next-action <text>] [--plan <markdown>]
+  harness-bridge vault-init --name <vaultName> [--domain <domain>] [--force]
+  harness-bridge vault-status
 `);
   process.exit(2);
 }
@@ -78,6 +81,26 @@ async function main() {
       notes: readFlag(args, "--notes")
     });
     console.log(renderBridge(doc));
+    return;
+  }
+
+  if (command === "vault-init") {
+    const name = readFlag(args, "--name");
+    if (!name) usage();
+    const domain = readFlag(args, "--domain");
+    const force = args.includes("--force");
+    const result = initVault({
+      cwd: process.cwd(),
+      vaultName: name,
+      domain,
+      force
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  if (command === "vault-status") {
+    console.log(JSON.stringify(vaultStatus(process.cwd()), null, 2));
     return;
   }
 
