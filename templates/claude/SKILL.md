@@ -17,6 +17,10 @@ Prefer the `harness-bridge` MCP tools when available:
 - `bridge_recover` only when the bridge is stale, missing, or suspect.
 - `bridge_validate` before publishing or committing bridge changes.
 
+When calling bridge tools, pass the absolute workspace path as `cwd` when available. After write tools return, report the returned absolute `.harness/bridge.md` path; do not claim a handoff was saved unless the tool call succeeded.
+
+For `bridge_produce`, include the current session's handoff content in the tool arguments: updated `plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions as applicable. Only set `confirmNoChanges` after reviewing the session and confirming the existing bridge already contains the complete handoff.
+
 After `bridge_consume`, restate the goal, done state, discrepancies, and next action in your own words, then stop and wait for explicit user confirmation before executing.
 
 Do not write secrets, transcripts, or long architectural exposition into `.harness/bridge.md`.

@@ -16,6 +16,7 @@ import {
 } from "../core/bridge.js";
 import { getRepoRoot } from "../core/git.js";
 import { initVault, vaultStatus } from "../core/vault.js";
+import { PACKAGE_VERSION } from "../core/version.js";
 import fs from "node:fs";
 
 const PROMPT_FILES = {
@@ -132,7 +133,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
   const server = new McpServer(
     {
       name: "harness-bridge",
-      version: "0.1.0"
+      version: PACKAGE_VERSION
     },
     {
       instructions:

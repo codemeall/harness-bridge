@@ -37,6 +37,10 @@ For the prompt-to-tool conformance map, see [`docs/mcp-prompt-alignment.md`](../
 
 `bridge_init` can also install the maintainer snippet when called with `installInstructionsFor` set to `claude-code`, `codex`, `gemini-cli`, or `cursor`.
 
+All bridge tools accept an optional `cwd` argument. Agents should pass the absolute workspace path when the MCP client exposes it, because some editors start stdio MCP servers outside the active project directory. Write tools include the absolute `.harness/bridge.md` path in their response.
+
+`bridge_produce` rejects empty no-op calls unless the caller sets `confirmNoChanges: true` after verifying the existing bridge is already current. Normal producer calls should include the current handoff fields such as `plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions.
+
 ## LLM Wiki tools
 
 The same MCP server also includes tools for the separate LLM Wiki product:
