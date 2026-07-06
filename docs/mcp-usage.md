@@ -29,7 +29,7 @@ All bridge tools accept an optional `cwd` argument. Agents should pass the absol
 
 `bridge_produce` intentionally rejects an empty no-op call. The agent must provide the current handoff fields (`plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions), or set `confirmNoChanges: true` only after checking that the existing bridge already contains the complete handoff.
 
-The same MCP server also exposes LLM Wiki tools (`vault_init`, `vault_status`) for the separate knowledge-base workflow. See [`docs/llm-wiki.md`](./llm-wiki.md).
+The LLM Wiki knowledge-vault tools now ship separately in [`@codemeall/harness-wiki`](https://github.com/codemeall/harness-wiki).
 
 The server also exposes these prompt resources for agents that want the canonical prompt text:
 
@@ -39,7 +39,6 @@ The server also exposes these prompt resources for agents that want the canonica
 - `bridge_consumer_prompt`
 - `bridge_recover_prompt`
 - `bridge_uninstall_prompt`
-- `bridge_vault_init_prompt` for the separate LLM Wiki setup prompt
 
 ## Requirements
 
@@ -309,19 +308,6 @@ Expected result:
 
 After confirming, the new agent continues from the bridge and keeps updating it at checkpoints.
 
-## LLM Wiki tools
-
-This MCP server also includes tools for the separate LLM Wiki product:
-
-| Tool | What it does |
-|---|---|
-| `vault_init` | Scaffolds a markdown knowledge vault with `raw/`, `wiki/`, schema files, index, and log. |
-| `vault_status` | Reports vault scaffold state and lists pending ingests from `raw/`. |
-
-For setup, daily ingest/query/lint workflows, and the difference between LLM Wiki and Harness Bridge, read [`docs/llm-wiki.md`](./llm-wiki.md).
-
-Ingest, query, and lint are deliberately LLM-driven, not deterministic tools — they need judgment about what's important and what contradicts existing claims. The schema in `CLAUDE.md` is the interface.
-
 ## CLI fallback
 
 The package includes a small CLI for local checks.
@@ -344,8 +330,6 @@ node /absolute/path/to/harness-bridge/dist/cli.js validate .harness/bridge.md
 node /absolute/path/to/harness-bridge/dist/cli.js consume
 ```
 
-LLM Wiki CLI commands are documented in [`docs/llm-wiki.md`](./llm-wiki.md#cli-fallback).
-
 ## Recovery
 
 Use `bridge_recover` when `.harness/bridge.md` is missing, stale, or suspect.
@@ -364,7 +348,7 @@ Modes:
 - MCP bridge writes validate the schema and refuse credential-shaped content before writing.
 - Keep decisions append-only. Supersede old decisions with new entries instead of rewriting history.
 - Use serial handoffs: one agent works, then another agent resumes. Concurrent bridge editing is not supported yet.
-- Keep durable design rationale in docs or your vault/wiki; keep current task state in `.harness/bridge.md`.
+- Keep durable design rationale in docs or a long-lived knowledge base; keep current task state in `.harness/bridge.md`.
 
 ## Troubleshooting
 
@@ -375,4 +359,4 @@ Modes:
 | `npx` fails with cache permission errors | Fix the local npm cache ownership or use the Git-checkout setup. |
 | `bridge_status` says `head` or `dirty` differs | Read the discrepancy before acting; the bridge may be stale or the repo may have new uncommitted work. |
 | Cursor recovery cannot find transcript | Export/copy the Cursor chat manually and provide it to the agent for recovery. |
-| Bridge grows too long | Move durable rationale to docs or the vault; keep only goal, plan, next action, decisions, questions, and files touched. |
+| Bridge grows too long | Move durable rationale to docs or a long-lived knowledge base; keep only goal, plan, next action, decisions, questions, and files touched. |

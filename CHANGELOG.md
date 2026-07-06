@@ -4,6 +4,13 @@ All notable changes to Harness Bridge are documented here. The project adheres t
 
 ## [Unreleased]
 
+## [0.2.0]
+
+### Removed
+- **Breaking:** removed the LLM Wiki vault tooling (`vault_init` / `vault_status` MCP tools, the `bridge_vault_init_prompt` prompt/resource, the `vault-init` / `vault-status` CLI commands, `prompts/vault-init.md`, and `docs/llm-wiki.md`). The LLM Wiki workflow is now its own package, [`@codemeall/harness-wiki`](https://github.com/codemeall/harness-wiki), so the two products evolve independently. Existing vaults are unaffected; install `@codemeall/harness-wiki` to keep scaffolding and inspecting them.
+
+## [0.1.2]
+
 ### Changed
 - Reorganized public documentation so Harness Bridge and LLM Wiki are presented as separate products: the root README now focuses on bridge handoffs, and LLM Wiki has its own guide at `docs/llm-wiki.md`.
 - Updated the README onboarding to recommend MCP first for supported agents, with prompt paste flows documented as fallback/manual paths.

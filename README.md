@@ -8,7 +8,7 @@
 
 **What you install.** Recommended: configure the local MCP server so your coding agent can call bridge tools directly. If your agent does not support MCP, use the prompt-only fallback. In both modes, `.harness/bridge.md` stays the source of truth.
 
-**Related product.** LLM Wiki is a separate markdown knowledge-base workflow for long-lived research, design rationale, and decisions. Harness Bridge tracks the current task; LLM Wiki tracks the durable context around the work. See [`docs/llm-wiki.md`](./docs/llm-wiki.md).
+**Companion product.** Looking for the long-lived knowledge-base workflow (research, design rationale, decisions)? That now lives in its own package, [`@codemeall/harness-wiki`](https://github.com/codemeall/harness-wiki). Harness Bridge tracks the current task; Harness Wiki tracks the durable context around the work.
 
 ---
 
@@ -21,7 +21,6 @@
 - [Use it](#use-it)
 - [Common scenarios](#common-scenarios)
 - [Bridge prompt reference](#bridge-prompt-reference)
-- [Related product: LLM Wiki](#related-product-llm-wiki)
 - [Provider support (bridge)](#provider-support-bridge)
 - [MCP integration](#mcp-integration)
 - [MCP usage guide](./docs/mcp-usage.md)
@@ -253,26 +252,7 @@ Harness Bridge uses six operational prompts:
 | [`prompts/recover.md`](./prompts/recover.md) | Bridge is stale/missing/suspect | Rebuild or verify bridge from transcript |
 | [`prompts/uninstall.md`](./prompts/uninstall.md) | Remove Harness Bridge from a repo | Removes `.harness/` and maintainer snippet |
 
-Related LLM Wiki prompt:
-
-| Prompt | Feature | Purpose |
-|---|---|---|
-| [`prompts/vault-init.md`](./prompts/vault-init.md) | LLM Wiki | Bootstraps a separate long-lived knowledge vault |
-
----
-
-## Related product: LLM Wiki
-
-LLM Wiki is a separate markdown knowledge-base workflow for long-lived research, product thinking, design rationale, and decisions. It uses a vault with `raw/` sources, agent-maintained `wiki/` pages, and a schema in `CLAUDE.md` / `AGENTS.md`.
-
-Use Harness Bridge when you need a future coding session to resume the current task. Use LLM Wiki when you need future sessions to remember the durable context around many tasks.
-
-| Product | Stores | Lifespan | Path |
-|---|---|---|---|
-| Harness Bridge | Current in-flight task state | Per task / per handoff | `.harness/bridge.md` inside a project repo |
-| LLM Wiki | Research, decisions, design rationale, syntheses | Long-lived | A vault directory with `raw/` and `wiki/` |
-
-Read the LLM Wiki guide in [`docs/llm-wiki.md`](./docs/llm-wiki.md).
+> Looking for the long-lived knowledge-vault workflow? It now ships separately as [`@codemeall/harness-wiki`](https://github.com/codemeall/harness-wiki).
 
 ## Provider support (bridge)
 
@@ -307,8 +287,6 @@ node /absolute/path/to/harness-bridge/dist/cli.js mcp
 ```
 
 The MCP server exposes deterministic local tools for bridge status, init, checkpoint, produce, consume, recover, and validation while keeping `.harness/bridge.md` as the source of truth. It also exposes the canonical `prompts/*.md` files as MCP prompts/resources.
-
-The same server also exposes the separate LLM Wiki tools — `vault_init` and `vault_status`. See [`docs/llm-wiki.md`](./docs/llm-wiki.md) for LLM Wiki setup and daily usage.
 
 See [`providers/mcp.md`](./providers/mcp.md), [`docs/mcp-usage.md`](./docs/mcp-usage.md), and [`templates/`](./templates/) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup snippets.
 

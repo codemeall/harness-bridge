@@ -15,7 +15,6 @@ import {
   writeBridge
 } from "../core/bridge.js";
 import { getRepoRoot } from "../core/git.js";
-import { initVault, vaultStatus } from "../core/vault.js";
 import { PACKAGE_VERSION } from "../core/version.js";
 import fs from "node:fs";
 
@@ -25,8 +24,7 @@ const PROMPT_FILES = {
   producer: "producer.md",
   consumer: "consumer.md",
   recover: "recover.md",
-  uninstall: "uninstall.md",
-  "vault-init": "vault-init.md"
+  uninstall: "uninstall.md"
 } as const;
 
 type PromptName = keyof typeof PROMPT_FILES;
@@ -333,63 +331,6 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
       writeBridge(resolvedCwd, parseBridge(recoveredBridgeMarkdown));
       return jsonResponse({ written: true, path: bridgePath(resolvedCwd), validation });
     }
-  );
-
-  server.tool(
-    "vault_init",
-    "Scaffold an LLM Wiki / second-brain vault in the current directory: creates raw/, wiki/{entities,concepts,sources,syntheses}/, CLAUDE.md, AGENTS.md, wiki/index.md, wiki/log.md. Works in an empty dir (standalone vault) or alongside an existing project (appends a marker-fenced vault schema to the host CLAUDE.md/AGENTS.md). Idempotent on the schema-append path.",
-    {
-      vaultName: z.string().describe("Display name for the vault (used in CLAUDE.md heading and wiki/index.md)."),
-      domain: z
-        .string()
-        .optional()
-        .describe("Optional domain hint (e.g. 'software project', 'research', 'personal'). Recorded as a comment in CLAUDE.md."),
-      pairedProjects: z
-        .array(
-          z.object({
-            name: z.string(),
-            path: z.string(),
-            purpose: z.string(),
-            status: z.string()
-          })
-        )
-        .optional()
-        .describe("Optional sibling project repos to register in the Paired projects table."),
-      force: z
-        .boolean()
-        .default(false)
-        .describe("Override vault-specific collisions (existing wiki/ or vault-marked CLAUDE.md). Does not touch unrelated host-project files.")
-    },
-    async ({ vaultName, domain, pairedProjects, force }) => {
-      const result = initVault({ cwd, vaultName, domain, pairedProjects, force });
-      const lines: string[] = [
-        `Vault initialized (${result.scenario}) at ${result.cwd}.`,
-        ""
-      ];
-      if (result.createdDirs.length) {
-        lines.push("Created directories:", ...result.createdDirs.map((d) => `  - ${d}/`), "");
-      }
-      if (result.createdFiles.length) {
-        lines.push("Created files:", ...result.createdFiles.map((f) => `  - ${f}`), "");
-      }
-      if (result.appendedFiles.length) {
-        lines.push("Appended vault schema to:", ...result.appendedFiles.map((f) => `  - ${f}`), "");
-      }
-      if (result.skippedFiles.length) {
-        lines.push("Skipped (already vault-marked or present):", ...result.skippedFiles.map((f) => `  - ${f}`), "");
-      }
-      lines.push(
-        "Next: drop source documents into raw/ and tell the agent `ingest raw/<file>` (or `ingest <url>`). The agent follows the schema in CLAUDE.md to summarize and integrate them into the wiki. Fetch the canonical operations prompt via the `bridge_vault_init_prompt` MCP prompt if needed."
-      );
-      return textResponse(lines.join("\n"));
-    }
-  );
-
-  server.tool(
-    "vault_status",
-    "Report vault scaffold state in the current directory: which expected dirs/files exist, whether CLAUDE.md carries the vault marker, and which files in raw/ have no matching wiki/sources/<slug>.md (pending ingests).",
-    {},
-    async () => jsonResponse(vaultStatus(cwd))
   );
 
   return server;

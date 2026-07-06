@@ -41,16 +41,7 @@ All bridge tools accept an optional `cwd` argument. Agents should pass the absol
 
 `bridge_produce` rejects empty no-op calls unless the caller sets `confirmNoChanges: true` after verifying the existing bridge is already current. Normal producer calls should include the current handoff fields such as `plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions.
 
-## LLM Wiki tools
-
-The same MCP server also includes tools for the separate LLM Wiki product:
-
-| Tool | Purpose |
-|---|---|
-| `vault_init` | Scaffold a markdown knowledge vault with `raw/`, `wiki/`, schema files, index, and log. |
-| `vault_status` | Report vault scaffold state and pending ingests from `raw/`. |
-
-LLM Wiki setup and daily usage live in [`docs/llm-wiki.md`](../docs/llm-wiki.md).
+> The LLM Wiki knowledge-vault tools now ship separately in [`@codemeall/harness-wiki`](https://github.com/codemeall/harness-wiki).
 
 ## Provider setup
 
