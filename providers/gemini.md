@@ -15,8 +15,8 @@ Raw prompt paste in v1.
 - **Gemini Web:** **not accessible** to a local agent — there is no filesystem transcript. Recovery from web sessions requires the user to manually export or copy-paste the conversation, then point recovery at the exported file/text.
 - **Format:** version-dependent; recovery is robust to format drift.
 
-## Slash commands (future)
-Reserved names for v2: `/bridge-init`, `/bridge-save`, `/bridge-load`, `/bridge-recover`, `/bridge-uninstall`. Not shipped in v1.
+## Skills
+Install the `handoff`, `pickup`, and `harness-bridge` skills (invoke them the way this agent invokes skills) with `npx skills@latest add codemeall/harness-bridge` or `npx -y @codemeall/harness-bridge install-skills --agent gemini-cli`. Where the agent does not support skills, paste the prompts instead.
 
 ## Known quirks
 - **Web vs CLI split** is the major caveat. Continuous bridge maintenance works in both (the agent edits files either way), but transcript-based recovery only works automatically in the CLI.

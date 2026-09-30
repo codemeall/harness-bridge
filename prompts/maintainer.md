@@ -29,13 +29,17 @@ You are working in a repo that uses **Harness Bridge** for cross-session continu
 
 5. **Stay terse.** A 10-minute task → a ~30-line bridge. The bridge is a reference card, not a journal.
 
-6. **Redact secrets.** Never write API keys, tokens, passwords, `.env*` values, or anything credential-shaped into the bridge.
+6. **Reference, don't duplicate.** If context already lives in a spec, plan, ADR, issue, PR, commit, or doc, link its path or URL in an optional `## References` section (after *Files touched*) instead of copying it. *Files touched* records each file's state, not its diff.
 
-7. **Don't commit on the user's behalf.** Stage edits to `.harness/bridge.md`; let the user commit.
+7. **Redact secrets and personal data.** Never write API keys, tokens, passwords, `.env*` values, credentialed URLs, or personal data (emails, phone numbers, customer records) into the bridge. Say where a value lives instead.
 
-8. **Verify bridge tool writes.** When using MCP, pass the absolute workspace path as `cwd` when available and report the returned `.harness/bridge.md` path after write tools. Never say a handoff was produced unless the tool call succeeded.
+8. **Don't commit on the user's behalf.** Stage edits to `.harness/bridge.md`; let the user commit.
 
-9. **Producer handoffs need content.** On "Produce a Harness Bridge handoff," review the session and pass the updated handoff fields to `bridge_produce` (`plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions). If nothing changed since the previous checkpoint, set `confirmNoChanges` only after verifying the existing bridge is already complete.
+9. **Verify bridge tool writes.** When using MCP, pass the absolute workspace path as `cwd` when available and report the returned `.harness/bridge.md` path after write tools. Never say a handoff was produced unless the tool call succeeded.
+
+10. **Producer handoffs need content.** On "Produce a Harness Bridge handoff" (or `/handoff`), review the session and pass the updated handoff fields to `bridge_produce` (`plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, appended decisions, and when useful `focus`, `references`, `suggestedSkills`). If nothing changed since the previous checkpoint, set `confirmNoChanges` only after verifying the existing bridge is already complete.
+
+11. **Optional handoff sections.** When handing off, you may add `## Next session focus` (after *Goal*: what the next session is for), `## References` (after *Files touched*), and `## Suggested skills` (after *References*: skills the next agent should load, one reason each). Leave them out when empty.
 
 ### Cadence override
 

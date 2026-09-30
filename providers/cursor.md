@@ -15,8 +15,8 @@ Raw prompt paste into the Cursor chat panel in v1.
 - **v1 procedure:** if you need to run recovery in Cursor, **export the chat manually** (Cursor's UI provides a "copy chat" / "export" affordance) and either save the export to a file or paste it into the recovery prompt.
 - The recovery prompt itself is agnostic about transcript format — it works on plain text dumps as well as structured logs.
 
-## Slash commands (future)
-Reserved names for v2: `/bridge-init`, `/bridge-save`, `/bridge-load`, `/bridge-recover`, `/bridge-uninstall`. Not shipped in v1.
+## Skills
+Install the `handoff`, `pickup`, and `harness-bridge` skills (invoke them the way this agent invokes skills) with `npx skills@latest add codemeall/harness-bridge` or `npx -y @codemeall/harness-bridge install-skills --agent cursor`. Where the agent does not support skills, paste the prompts instead.
 
 ## Known quirks
 - Cursor's agent runs inside the IDE and has direct file-editing access, so the maintainer / consumer flows work without anything special.

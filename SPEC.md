@@ -27,7 +27,7 @@ The bridge is:
 - One file per repo.
 - The `.harness/` directory exists solely to hold the bridge (and possibly future Harness-Bridge state).
 - The path is fixed in v1. Tooling MUST NOT look elsewhere.
-- The user MAY add `.harness/` to `.gitignore` per-repo if they want bridges to be local-only. Default is to commit.
+- The user MAY keep bridges local-only, either by adding `.harness/` to `.gitignore` (shared) or to the clone's `.git/info/exclude` (this clone only; what `bridge_init localOnly` and `harness-bridge init --local` do). Default is to commit.
 
 ## 3. Schema — frontmatter
 
@@ -66,6 +66,9 @@ The body MUST contain the following sections, in this order, with these exact he
 ## Goal
 <2–4 sentences describing the destination. Not the next step — the why.>
 
+## Next session focus
+<Optional. What the next session will be used for.>
+
 ## Plan
 - [x] completed step
 - [x] completed step
@@ -89,12 +92,22 @@ Legend: [x] done · [~] in progress · [ ] pending
 ## Files touched
 - `path/to/file` — short note on state (new helper / WIP edit / tests broken / etc.)
 
+## References
+- <Optional. Path or URL of a spec, plan, ADR, issue, PR, or commit that already holds context.>
+
+## Suggested skills
+- <Optional. `skill-name` — why the next agent should load it.>
+
 ## Notes for the next agent
 <Optional. Style/context hints. Keep brief.>
 ```
 
 ### Section rules
-- All sections except **Notes for the next agent** are REQUIRED. Empty sections MUST be rendered with a placeholder line ("_(none)_") rather than omitted.
+- **Goal**, **Plan**, **Next action**, **Decisions & rationale**, **Open questions**, and **Files touched** are REQUIRED. Empty required sections MUST be rendered with a placeholder line ("_(none)_") rather than omitted.
+- **Next session focus**, **References**, **Suggested skills**, and **Notes for the next agent** are OPTIONAL. Writers SHOULD omit an optional section that has no content (Notes MAY be rendered empty, as earlier v1 tooling did).
+- Known sections MUST appear in the order shown above. Sections a tool does not recognize MUST be preserved unmodified when patching (forward compatibility, like unknown frontmatter fields).
+- **References** exists so the bridge does not duplicate context that already lives elsewhere. Writers SHOULD link specs, plans, ADRs, issues, PRs, and commits rather than copy them.
+- **Suggested skills** names skills (or tools) the receiving agent should load before acting, each with a short reason. Receivers SHOULD load the ones available to them.
 - The `[~]` checkbox marker for in-progress items is a Harness Bridge extension to GitHub-flavored markdown.
 - **Decisions & rationale** is append-only. A reader MUST be able to reconstruct the full decision history. To change a past decision, add a new entry that supersedes the old one and references it.
 - **Next action** is the single load-bearing field. It MUST be imperative, specific, and actionable without the surrounding context.
@@ -104,7 +117,9 @@ Legend: [x] done · [~] in progress · [ ] pending
 The bridge MUST NOT contain:
 - Verbatim conversation transcripts (use the Recovery flow instead — see §8).
 - Long architectural exposition (lives in repo docs, not the bridge).
-- Secrets: API keys, tokens, passwords, `.env*` values, anything credential-shaped.
+- Secrets: API keys, tokens, passwords, `.env*` values, credentialed URLs, private keys, anything credential-shaped.
+- Personal data: emails, phone numbers, customer or user records.
+- Copies of content that already lives in another artifact (spec, ADR, issue, PR, commit, diff). Reference it under **References** instead.
 
 ## 6. Cadence
 
@@ -146,8 +161,8 @@ Recovery output MUST be a normal `harness-bridge/v1` bridge with `generated_by: 
 |---|---|---|
 | Init | `prompts/init.md` | Creates `.harness/bridge.md`; appends maintainer snippet to provider's instructions file |
 | Maintain | `prompts/maintainer.md` (loaded via instructions file) | Continuous updates per cadence |
-| Produce | `prompts/producer.md` | Explicit finalize before a deliberate handoff |
-| Consume | `prompts/consumer.md` | New session reads bridge, grounds in git state, restates, waits for confirm, then resumes |
+| Produce | `prompts/producer.md` · `/handoff [focus]` skill | Explicit finalize before a deliberate handoff, optionally tailored to what the next session is for |
+| Consume | `prompts/consumer.md` · `/pickup` skill | New session reads bridge, grounds in git state, loads suggested skills, restates, waits for confirm, then resumes |
 | Recover | `prompts/recover.md` | Rebuild or top-up bridge from session transcript |
 | Uninstall | `prompts/uninstall.md` | Symmetrically removes both install artifacts |
 
@@ -156,7 +171,7 @@ Recovery output MUST be a normal `harness-bridge/v1` bridge with `generated_by: 
 A tool, agent, or integration is **v1-conformant** if it:
 1. Reads bridges following §3–§4 without error.
 2. Writes bridges that pass §3–§4 validation.
-3. Preserves unknown frontmatter fields when patching (§3, forward-compat).
+3. Preserves unknown frontmatter fields and unknown body sections when patching (§3, §4, forward-compat).
 4. Honors the cadence rules in §6 when maintaining.
 5. Never writes content excluded by §5.
 6. Uses the canonical marker header from §7 when installing the maintainer snippet.

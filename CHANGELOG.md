@@ -4,6 +4,25 @@ All notable changes to Harness Bridge are documented here. The project adheres t
 
 ## [Unreleased]
 
+## [0.3.0]
+
+### Added
+- **Installable skills** in `skills/`: `handoff` (`/handoff [what the next session is for]`, user-invoked only), `pickup` (resume with git grounding and a confirmation gate), and `harness-bridge` (init, checkpoints, recovery, validation, removal). They work with or without the MCP server.
+- **Three install paths:** as a Claude Code plugin (`/plugin marketplace add codemeall/harness-bridge`, then `/plugin install harness-bridge@codemeall`, which bundles the skills and the MCP server), from GitHub with `npx skills@latest add codemeall/harness-bridge`, or from npm with `npx -y @codemeall/harness-bridge install-skills [--agent claude-code|codex|cursor|gemini-cli] [--project] [--dir <path>] [--force]`, plus `uninstall-skills`.
+- **Optional bridge sections** (additive within `harness-bridge/v1`): `## Next session focus`, `## References` (link specs, ADRs, issues, PRs, and commits instead of copying them), and `## Suggested skills` (skills the next agent should load). `bridge_checkpoint`/`bridge_produce` accept `focus`, `references`, and `suggestedSkills`; the CLI takes `--focus`, `--references`, and `--suggested-skills`.
+- **Local-only bridges:** `bridge_init` takes `localOnly: true` and the CLI takes `init --local`. Both add `/.harness/` to `.git/info/exclude`; `bridge_status` reports `ignoredByGit`.
+- `bridge_consume` now also surfaces decisions already made, open questions, focus, references, and suggested skills.
+
+### Changed
+- Broader secret detection before writes and in redaction: GitHub, npm, Slack, AWS, and Google tokens, JWTs, bearer tokens, private keys, and credentialed URLs. `password`/`secret`/`token`/`api_key` assignments are now caught while placeholders and env lookups (`${VAR}`, `process.env.X`, `<from vault>`) and plain numbers (`max_tokens: 1024`) are no longer flagged. The refusal names what was found.
+- Producer, consumer, and maintainer prompts and the provider snippets now cover next-session focus, references instead of duplicated context, suggested skills, and personal-data redaction.
+
+### Fixed
+- Patching a bridge no longer drops body sections the tool doesn't recognize (forward compatibility, now required by SPEC §4/§10).
+
+### Removed
+- `templates/claude/SKILL.md`, replaced by `skills/harness-bridge/SKILL.md` and the new install paths.
+
 ## [0.2.0]
 
 ### Removed

@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   bridgePath,
   checkpointBridge,
+  excludeBridgeFromGit,
   getStatus,
   initBridge,
   parseBridge,
@@ -59,6 +60,9 @@ function hasBridgePatch(args: {
   openQuestions?: string;
   filesTouched?: string;
   notes?: string;
+  focus?: string;
+  references?: string;
+  suggestedSkills?: string;
 }): boolean {
   return Boolean(
     args.title?.trim() ||
@@ -68,7 +72,10 @@ function hasBridgePatch(args: {
       (args.decisionsToAppend?.some((item) => item.trim().length > 0) ?? false) ||
       args.openQuestions?.trim() ||
       args.filesTouched?.trim() ||
-      args.notes?.trim()
+      args.notes?.trim() ||
+      args.focus?.trim() ||
+      args.references?.trim() ||
+      args.suggestedSkills?.trim()
   );
 }
 
@@ -127,6 +134,36 @@ function installProviderInstructions(cwd: string, provider: "claude-code" | "cod
   return `Updated ${target}.`;
 }
 
+const cwdArg = z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd.");
+
+const handoffFields = {
+  title: z.string().optional(),
+  goal: z.string().optional(),
+  plan: z.string().optional().describe("Full markdown checklist using [x] done, [~] in progress, [ ] pending."),
+  nextAction: z.string().optional().describe("Imperative, specific, executable without the rest of the bridge."),
+  decisionsToAppend: z.array(z.string()).optional().describe("New decisions with rationale. Appended; never rewrites old ones."),
+  openQuestions: z.string().optional(),
+  filesTouched: z.string().optional(),
+  notes: z.string().optional(),
+  focus: z
+    .string()
+    .optional()
+    .describe("What the next session will be used for. Replaces the 'Next session focus' section; pass an empty string to clear it."),
+  references: z
+    .string()
+    .optional()
+    .describe(
+      "Markdown list of paths/URLs to specs, plans, ADRs, issues, PRs, or commits that already capture context. Reference them here instead of copying their content into the bridge. Empty string clears it."
+    ),
+  suggestedSkills: z
+    .string()
+    .optional()
+    .describe("Markdown list of skills (or MCP tools) the next agent should load, each with a short reason. Empty string clears it."),
+  generatedBy: z.string().default("mcp:harness-bridge"),
+  cwd: cwdArg,
+  cadence: z.enum(["checkpoint", "lazy", "aggressive"]).optional()
+};
+
 export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
   const server = new McpServer(
     {
@@ -135,7 +172,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
     },
     {
       instructions:
-        "Use Harness Bridge tools to maintain .harness/bridge.md for serial AI coding-agent handoffs. The bridge file remains the source of truth. After bridge_consume, restate the returned state and wait for user confirmation before executing."
+        "Use Harness Bridge tools to maintain .harness/bridge.md for serial AI coding-agent handoffs. The bridge file remains the source of truth. Reference existing artifacts (specs, ADRs, issues, PRs, commits) instead of copying them into the bridge, and never write secrets or personal data. After bridge_consume, restate the returned state, load any suggested skills, and wait for user confirmation before executing."
     }
   );
 
@@ -174,7 +211,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
     "bridge_status",
     "Read .harness/bridge.md, validate it, and compare frontmatter against current git state.",
     {
-      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd.")
+      cwd: cwdArg
     },
     async ({ cwd: requestedCwd }) => jsonResponse(getStatus(targetCwd(cwd, requestedCwd)))
   );
@@ -184,7 +221,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
     "Validate a bridge markdown string, or validate the current repo bridge when markdown is omitted.",
     {
       markdown: z.string().optional(),
-      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd.")
+      cwd: cwdArg
     },
     async ({ markdown, cwd: requestedCwd }) => {
       const resolvedCwd = targetCwd(cwd, requestedCwd);
@@ -207,19 +244,25 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
       nextAction: z.string().optional().describe("Imperative next action."),
       generatedBy: z.string().default("mcp:harness-bridge"),
       cadence: z.enum(["checkpoint", "lazy", "aggressive"]).default("checkpoint"),
-      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd."),
+      cwd: cwdArg,
+      localOnly: z
+        .boolean()
+        .default(false)
+        .describe("Keep the bridge out of git by adding .harness/ to this clone's .git/info/exclude (no shared .gitignore change)."),
       installInstructionsFor: z
         .enum(["claude-code", "codex", "gemini-cli", "cursor"])
         .optional()
         .describe("Optional provider instruction file to update with the canonical maintainer snippet from prompts/maintainer.md.")
     },
-    async ({ title, goal, plan, nextAction, generatedBy, cadence, cwd: requestedCwd, installInstructionsFor }) => {
+    async ({ title, goal, plan, nextAction, generatedBy, cadence, cwd: requestedCwd, localOnly, installInstructionsFor }) => {
       const resolvedCwd = targetCwd(cwd, requestedCwd);
       const doc = initBridge({ cwd: resolvedCwd, title, goal, plan, nextAction, generatedBy, cadence });
       const instructionResult = installInstructionsFor ? installProviderInstructions(resolvedCwd, installInstructionsFor) : "";
+      const localOnlyResult = localOnly ? `Kept the bridge local-only via ${excludeBridgeFromGit(resolvedCwd)}.` : "";
       return textResponse(
         [
           instructionResult,
+          localOnlyResult,
           `Initialized bridge at ${bridgePath(resolvedCwd)} using the prompts/init.md schema and prompts/maintainer.md template.`,
           renderBridge(doc)
         ]
@@ -232,19 +275,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
   server.tool(
     "bridge_checkpoint",
     "Patch checkpoint fields in .harness/bridge.md after a completed step, decision, or edit batch.",
-    {
-      title: z.string().optional(),
-      goal: z.string().optional(),
-      plan: z.string().optional(),
-      nextAction: z.string().optional(),
-      decisionsToAppend: z.array(z.string()).optional(),
-      openQuestions: z.string().optional(),
-      filesTouched: z.string().optional(),
-      notes: z.string().optional(),
-      generatedBy: z.string().default("mcp:harness-bridge"),
-      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd."),
-      cadence: z.enum(["checkpoint", "lazy", "aggressive"]).optional()
-    },
+    handoffFields,
     async (args) => {
       const resolvedCwd = targetCwd(cwd, args.cwd);
       const doc = checkpointBridge({ ...args, cwd: resolvedCwd });
@@ -254,23 +285,13 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
 
   server.tool(
     "bridge_produce",
-    "Finalize the bridge before a deliberate handoff. Provide the current session summary fields, or set confirmNoChanges when the bridge is already current.",
+    "Finalize the bridge before a deliberate handoff. Review the whole session and pass what changed: sharpened nextAction, plan, appended decisions, open questions, files touched. If the user said what the next session is for, pass it as focus and tailor nextAction to it. List skills the next agent should load in suggestedSkills, and point to existing specs/ADRs/issues/PRs/commits in references instead of copying them. Set confirmNoChanges only when the bridge is already complete.",
     {
-      title: z.string().optional(),
-      goal: z.string().optional(),
-      plan: z.string().optional(),
-      nextAction: z.string().optional(),
-      decisionsToAppend: z.array(z.string()).optional(),
-      openQuestions: z.string().optional(),
-      filesTouched: z.string().optional(),
-      notes: z.string().optional(),
-      generatedBy: z.string().default("mcp:harness-bridge"),
-      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd."),
+      ...handoffFields,
       confirmNoChanges: z
         .boolean()
         .default(false)
-        .describe("Set true only after reviewing this session and confirming the existing bridge needs no content changes."),
-      cadence: z.enum(["checkpoint", "lazy", "aggressive"]).optional()
+        .describe("Set true only after reviewing this session and confirming the existing bridge needs no content changes.")
     },
     async (args) => {
       if (!args.confirmNoChanges && !hasBridgePatch(args)) {
@@ -280,7 +301,13 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
       }
       const resolvedCwd = targetCwd(cwd, args.cwd);
       const doc = checkpointBridge({ ...args, cwd: resolvedCwd });
-      return textResponse([`Produced handoff bridge at ${bridgePath(resolvedCwd)}.`, renderBridge(doc)].join("\n\n"));
+      return textResponse(
+        [
+          `Produced handoff bridge at ${bridgePath(resolvedCwd)}.`,
+          "To resume in a fresh session (same or different agent), open this repo and run /pickup, or say: Consume the Harness Bridge and restate where we are.",
+          renderBridge(doc)
+        ].join("\n\n")
+      );
     }
   );
 
@@ -288,7 +315,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
     "bridge_consume",
     "Return grounded bridge state for a fresh session. The caller must restate it and wait for user confirmation before acting.",
     {
-      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd.")
+      cwd: cwdArg
     },
     async ({ cwd: requestedCwd }) => textResponse(summarizeForConsume(targetCwd(cwd, requestedCwd)))
   );
@@ -303,7 +330,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
         .optional()
         .describe("Complete recovered bridge markdown for full/since modes, synthesized by the agent from transcript evidence."),
       transcriptText: z.string().optional().describe("Optional transcript text to redact and inspect in verify mode."),
-      cwd: z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd."),
+      cwd: cwdArg,
       write: z.boolean().default(false).describe("Set true only after user confirmation.")
     },
     async ({ mode, recoveredBridgeMarkdown, transcriptText, cwd: requestedCwd, write }) => {

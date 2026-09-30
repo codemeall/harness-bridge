@@ -20,15 +20,18 @@ Resume work from the Harness Bridge in this repo.
    - Run `git diff <bridge-head> -- <file>` (or `git status <file>` if untracked).
    - Read the file at its current state.
 
-4. **Restate, in your own words:**
-   - The goal.
+4. **Load context the bridge points to.** Read the *References* that bear on the Next action (skip the rest until needed). Load each skill listed under *Suggested skills* that exists in this environment.
+
+5. **Restate, in your own words:**
+   - The goal, and the *Next session focus* if present.
    - What's done.
    - What's next.
+   - Decisions already made (don't re-open them unless I ask).
 
    **Then stop and wait for me to confirm** before executing anything. This step is non-negotiable — it's the cheapest way to catch a misread of the bridge.
 
-5. **Once I confirm**, execute the Next action.
+6. **Once I confirm**, execute the Next action.
 
-6. **From this point on**, follow the maintainer rules in the provider's instructions file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/harness-bridge.md`). Update the bridge at checkpoints.
+7. **From this point on**, follow the maintainer rules in the provider's instructions file (`CLAUDE.md` / `AGENTS.md` / `GEMINI.md` / `.cursor/rules/harness-bridge.md`). Update the bridge at checkpoints.
 
 If at any step the bridge looks inconsistent with the actual repo state, stop and surface the discrepancy. Do not silently reconcile.

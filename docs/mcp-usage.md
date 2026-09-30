@@ -27,7 +27,17 @@ After setup, your agent can use these tools:
 
 All bridge tools accept an optional `cwd` argument. Agents should pass the absolute workspace path when the MCP client exposes it, especially in editors that can start stdio MCP servers from a different process directory than the project. Write tools return the absolute `.harness/bridge.md` path they updated.
 
-`bridge_produce` intentionally rejects an empty no-op call. The agent must provide the current handoff fields (`plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions), or set `confirmNoChanges: true` only after checking that the existing bridge already contains the complete handoff.
+`bridge_produce` intentionally rejects an empty no-op call. The agent must provide the current handoff fields (`plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, appended decisions, `focus`, `references`, or `suggestedSkills`), or set `confirmNoChanges: true` only after checking that the existing bridge already contains the complete handoff.
+
+`bridge_checkpoint` and `bridge_produce` also accept three optional handoff fields:
+
+| Field | Section written | Use it for |
+|---|---|---|
+| `focus` | `## Next session focus` | What the next session will be used for; `/handoff <text>` passes this through. |
+| `references` | `## References` | Paths/URLs to specs, ADRs, issues, PRs, commits: link them instead of copying them into the bridge. |
+| `suggestedSkills` | `## Suggested skills` | Skills the next agent should load, one reason each. |
+
+Pass an empty string to clear one. `bridge_init` accepts `localOnly: true` to keep the bridge out of git via `.git/info/exclude`.
 
 The LLM Wiki knowledge-vault tools now ship separately in [`@codemeall/harness-wiki`](https://github.com/codemeall/harness-wiki).
 
@@ -100,12 +110,14 @@ With a Git checkout:
 claude mcp add --transport stdio harness-bridge -- node /absolute/path/to/harness-bridge/dist/cli.js mcp
 ```
 
-Optional project skill:
+Add the skills (`/handoff`, `/pickup`, `harness-bridge`):
 
 ```bash
-mkdir -p .claude/skills/harness-bridge
-cp /absolute/path/to/harness-bridge/templates/claude/SKILL.md .claude/skills/harness-bridge/SKILL.md
+npx -y @codemeall/harness-bridge install-skills             # user-level, ~/.claude/skills
+npx -y @codemeall/harness-bridge install-skills --project   # this repo, .claude/skills
 ```
+
+Or install both the MCP server and the skills as a plugin from inside Claude Code: `/plugin marketplace add codemeall/harness-bridge`, then `/plugin install harness-bridge@codemeall`.
 
 ### Cursor
 
@@ -277,7 +289,7 @@ Checkpoint the bridge: the in-memory limiter is implemented and unit-tested. Nex
 
 ### 3. Switch agents or sessions
 
-Before leaving the current agent, say:
+Before leaving the current agent, run `/handoff` (optionally with what the next session is for), or say:
 
 ```text
 Produce a Harness Bridge handoff.
@@ -287,6 +299,7 @@ Expected result:
 
 - Agent calls `bridge_produce`.
 - Agent passes the current session's handoff content, or explicitly confirms no content changes were needed.
+- References and suggested skills are recorded for the next agent, and the next-session focus if you gave one.
 - `Next action` is specific and executable.
 - Git state in frontmatter is updated.
 - The tool response includes the absolute `.harness/bridge.md` path that was written.
@@ -294,7 +307,7 @@ Expected result:
 
 ### 4. Resume elsewhere
 
-Open the same repo in another agent and say:
+Open the same repo in another agent and run `/pickup`, or say:
 
 ```text
 Consume the Harness Bridge and restate where we are.
@@ -319,7 +332,9 @@ harness-bridge status
 harness-bridge validate .harness/bridge.md
 harness-bridge consume
 harness-bridge init --title "Add rate limits" --goal "Add per-token rate limiting to public API endpoints."
-harness-bridge checkpoint --next-action "Run npm test."
+harness-bridge checkpoint --next-action "Run npm test." --focus "Get CI green."
+harness-bridge init --title "Spike" --goal "Try the new parser." --local   # keep the bridge out of git
+harness-bridge install-skills [--agent claude-code|codex|cursor|gemini-cli] [--project] [--dir <path>] [--force]
 ```
 
 If running from a Git checkout:
@@ -344,8 +359,9 @@ Modes:
 
 ## Safety rules
 
-- Do not put secrets, tokens, `.env` values, passwords, or raw transcripts in `.harness/bridge.md`.
-- MCP bridge writes validate the schema and refuse credential-shaped content before writing.
+- Do not put secrets, tokens, `.env` values, passwords, personal data, or raw transcripts in `.harness/bridge.md`.
+- MCP bridge writes validate the schema and refuse credential-shaped content before writing (API keys, GitHub/npm/Slack/AWS/Google tokens, JWTs, bearer tokens, private keys, credentialed URLs, `password=`-style assignments).
+- Reference specs, ADRs, issues, PRs, and commits instead of copying them into the bridge.
 - Keep decisions append-only. Supersede old decisions with new entries instead of rewriting history.
 - Use serial handoffs: one agent works, then another agent resumes. Concurrent bridge editing is not supported yet.
 - Keep durable design rationale in docs or a long-lived knowledge base; keep current task state in `.harness/bridge.md`.

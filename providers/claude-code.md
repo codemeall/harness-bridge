@@ -8,7 +8,7 @@ Notes specific to using Harness Bridge with [Claude Code](https://github.com/ant
 - **Install behavior:** `prompts/init.md` appends a `## Harness Bridge — keep .harness/bridge.md current` section. Existing `CLAUDE.md` content is preserved.
 
 ## Init / Producer / Consumer / Recover / Uninstall
-All prompts are pasted raw into the Claude Code prompt. Slash-command wrappers are deferred to v2.
+Use the `/handoff` and `/pickup` skills (see **Skills** below), or paste the prompts raw into the Claude Code prompt.
 
 ## Transcript location (for recovery)
 - **Default glob:** `~/.claude/projects/<encoded-cwd>/*.jsonl`
@@ -16,8 +16,8 @@ All prompts are pasted raw into the Claude Code prompt. Slash-command wrappers a
 - **Latest-session heuristic:** highest mtime among `*.jsonl` in that directory.
 - **Format:** newline-delimited JSON. One object per turn or tool call. Contains user/assistant content, tool inputs, tool outputs (often large — recovery prompts should skip raw tool outputs).
 
-## Slash commands (future)
-Reserved names for v2: `/bridge-init`, `/bridge-save`, `/bridge-load`, `/bridge-recover`, `/bridge-uninstall`. Not shipped in v1.
+## Skills
+Install the `/handoff`, `/pickup`, and `harness-bridge` skills with `npx skills@latest add codemeall/harness-bridge` or `npx -y @codemeall/harness-bridge install-skills`, or as a Claude Code plugin: `/plugin marketplace add codemeall/harness-bridge` then `/plugin install harness-bridge@codemeall` (skills are then `/harness-bridge:handoff` and `/harness-bridge:pickup`). Where the agent does not support skills, paste the prompts instead.
 
 ## Known quirks
 - `CLAUDE.md` is injected as a system reminder, so the maintainer snippet must be **self-contained** — no `(see file X)` indirection. The canonical snippet in `prompts/maintainer.md` already satisfies this.

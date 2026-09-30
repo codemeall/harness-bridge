@@ -155,4 +155,44 @@ describe("mcp server", () => {
     await client.close();
     await server.close();
   });
+
+  it("writes focus, references, and suggested skills from bridge_produce", async () => {
+    const { client, server } = await connectClient();
+    await initTargetBridge(client);
+
+    const result = await client.callTool({
+      name: "bridge_produce",
+      arguments: {
+        cwd: targetCwd,
+        focus: "Ship the retry path.",
+        references: "- `docs/spec.md` — retry semantics",
+        suggestedSkills: "- tdd — start from a failing test"
+      }
+    });
+
+    const bridgeMarkdown = fs.readFileSync(path.join(targetCwd, BRIDGE_RELATIVE_PATH), "utf8");
+    expect(result.isError).not.toBe(true);
+    expect(textContent(result)).toContain("/pickup");
+    expect(bridgeMarkdown).toContain("## Next session focus\nShip the retry path.");
+    expect(bridgeMarkdown).toContain("## References\n- `docs/spec.md` — retry semantics");
+    expect(bridgeMarkdown).toContain("## Suggested skills\n- tdd — start from a failing test");
+
+    await client.close();
+    await server.close();
+  });
+
+  it("keeps the bridge out of git when bridge_init is called with localOnly", async () => {
+    const { client, server } = await connectClient();
+    const result = await client.callTool({
+      name: "bridge_init",
+      arguments: { cwd: targetCwd, title: "Local", goal: "Keep handoffs out of commits.", localOnly: true }
+    });
+
+    expect(textContent(result)).toContain("local-only");
+    expect(git(targetCwd, ["status", "--porcelain"])).not.toContain(".harness");
+
+    await client.close();
+    await server.close();
+  });
 });
+
