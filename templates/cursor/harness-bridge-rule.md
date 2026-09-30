@@ -13,8 +13,8 @@ When the Harness Bridge MCP server is configured, use its tools instead of copy-
 
 When calling a bridge tool from Cursor, pass the absolute workspace path as `cwd` whenever Cursor exposes it. After a write tool returns, report the returned absolute path; do not claim a handoff was saved unless the tool call succeeded.
 
-For `bridge_produce`, include the current session's handoff content in the tool arguments: updated `plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions as applicable. Only set `confirmNoChanges` when you have reviewed the session and the existing bridge already contains the complete handoff.
+For `bridge_produce`, include the current session's handoff content in the tool arguments: updated `plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions as applicable. If the user said what the next session is for, pass it as `focus`. Link existing specs/ADRs/issues/PRs/commits in `references` instead of copying them, and list skills the next agent should load in `suggestedSkills`. Only set `confirmNoChanges` when you have reviewed the session and the existing bridge already contains the complete handoff.
 
-After `bridge_consume`, restate the current goal, completed work, discrepancies, and next action, then wait for explicit user confirmation before editing files.
+After `bridge_consume`, load any suggested skills, restate the current goal, completed work, discrepancies, and next action, then wait for explicit user confirmation before editing files.
 
-Keep `.harness/bridge.md` terse and secret-free.
+Keep `.harness/bridge.md` terse and free of secrets and personal data.

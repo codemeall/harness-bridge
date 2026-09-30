@@ -1,0 +1,15 @@
+{
+  "name": "codemeall",
+  "description": "Claude Code plugins from codemeall.",
+  "owner": {
+    "name": "codemeall",
+    "url": "https://github.com/codemeall"
+  },
+  "plugins": [
+    {
+      "name": "harness-bridge",
+      "source": "./",
+      "description": "Hand off AI coding sessions through .harness/bridge.md: /handoff to finalize, /pickup to resume."
+    }
+  ]
+}

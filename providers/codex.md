@@ -15,8 +15,8 @@ Raw prompt paste in v1.
 - **Latest-session heuristic:** most recently modified session file scoped to the current project. If discovery fails, the recovery prompt falls back to asking the user for the file path.
 - **Format:** version-dependent; the recovery prompt is written to be robust to format drift (parse user turns, assistant turns, tool calls; skip large raw outputs).
 
-## Slash commands (future)
-Reserved names for v2: `/bridge-init`, `/bridge-save`, `/bridge-load`, `/bridge-recover`, `/bridge-uninstall`. Not shipped in v1.
+## Skills
+Install the `handoff`, `pickup`, and `harness-bridge` skills (invoke them the way this agent invokes skills) with `npx skills@latest add codemeall/harness-bridge` or `npx -y @codemeall/harness-bridge install-skills --agent codex`. Where the agent does not support skills, paste the prompts instead.
 
 ## Known quirks
 - Codex's `AGENTS.md` convention is well-aligned with Harness Bridge's instructions-file approach. The maintainer snippet drops in cleanly.

@@ -1,7 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import YAML from "yaml";
-import { getGitState, getRepoRoot, gitDiffFromHead, gitLogRange, gitStatusForFile } from "./git.js";
+import {
+  getGitState,
+  getRepoRoot,
+  gitDiffFromHead,
+  gitLogRange,
+  gitPath,
+  gitStatusForFile,
+  isIgnoredByGit
+} from "./git.js";
 import type {
   BridgeDocument,
   BridgeFrontmatter,
@@ -24,8 +32,26 @@ export const REQUIRED_SECTIONS = [
   "Files touched"
 ];
 
-const OPTIONAL_SECTIONS = ["Notes for the next agent"];
-const ALL_SECTIONS = [...REQUIRED_SECTIONS, ...OPTIONAL_SECTIONS];
+export const NOTES_SECTION = "Notes for the next agent";
+export const FOCUS_SECTION = "Next session focus";
+export const REFERENCES_SECTION = "References";
+export const SUGGESTED_SKILLS_SECTION = "Suggested skills";
+
+// Canonical order of every known section. Optional sections (focus, references,
+// suggested skills, notes) are only rendered when they have content, except notes,
+// which v1 has always rendered.
+const ALL_SECTIONS = [
+  "Goal",
+  FOCUS_SECTION,
+  "Plan",
+  "Next action",
+  "Decisions & rationale",
+  "Open questions",
+  "Files touched",
+  REFERENCES_SECTION,
+  SUGGESTED_SKILLS_SECTION,
+  NOTES_SECTION
+];
 const REQUIRED_FRONTMATTER = [
   "schema",
   "generated_by",
@@ -38,11 +64,44 @@ const REQUIRED_FRONTMATTER = [
   "dirty"
 ];
 
-const SECRET_PATTERNS = [
-  /\bsk-[A-Za-z0-9_-]{20,}\b/,
-  /\b[A-Za-z0-9_-]*token[A-Za-z0-9_-]*\s*[:=]\s*[^\s"'`]+/i,
-  /\b[A-Za-z0-9_-]*password[A-Za-z0-9_-]*\s*[:=]\s*[^\s"'`]+/i,
-  /\b[A-Za-z0-9_-]*api[_-]?key[A-Za-z0-9_-]*\s*[:=]\s*[^\s"'`]+/i
+// Values that are references to a secret rather than the secret itself
+// (placeholders, env lookups, already-redacted markers).
+const NOT_A_LITERAL = String.raw`(?![<$\{\[(]|process\.env|os\.environ|env\.|REDACTED)`;
+
+const SECRET_RULES: Array<{ label: string; pattern: RegExp; replacement: string }> = [
+  {
+    label: "private key",
+    pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+    replacement: "[REDACTED_PRIVATE_KEY]"
+  },
+  { label: "API key", pattern: /\bsk-[A-Za-z0-9_-]{20,}/g, replacement: "[REDACTED_API_KEY]" },
+  { label: "GitHub token", pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b/g, replacement: "[REDACTED_GITHUB_TOKEN]" },
+  { label: "GitHub token", pattern: /\bgithub_pat_[A-Za-z0-9_]{22,}\b/g, replacement: "[REDACTED_GITHUB_TOKEN]" },
+  { label: "npm token", pattern: /\bnpm_[A-Za-z0-9]{36}\b/g, replacement: "[REDACTED_NPM_TOKEN]" },
+  { label: "AWS access key", pattern: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, replacement: "[REDACTED_AWS_KEY]" },
+  { label: "Slack token", pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g, replacement: "[REDACTED_SLACK_TOKEN]" },
+  { label: "Google API key", pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g, replacement: "[REDACTED_GOOGLE_KEY]" },
+  {
+    label: "JWT",
+    pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+    replacement: "[REDACTED_JWT]"
+  },
+  { label: "bearer token", pattern: /\b(Bearer\s+)[A-Za-z0-9._~+/-]{20,}=*/gi, replacement: "$1[REDACTED]" },
+  {
+    label: "URL credentials",
+    pattern: /\b([a-z][a-z0-9+.-]*:\/\/[^\s:@/]+:)[^\s@/]+@/gi,
+    replacement: "$1[REDACTED]@"
+  },
+  {
+    label: "credential assignment",
+    pattern: new RegExp(
+      String.raw`\b([A-Za-z0-9_-]*(?:token|secret|password|passwd|api[_-]?key|access[_-]?key)[A-Za-z0-9_-]*\s*[:=]\s*)` +
+        NOT_A_LITERAL +
+        String.raw`(?!\d+\b)[^\s"'\`]{6,}`,
+      "gi"
+    ),
+    replacement: "$1[REDACTED]"
+  }
 ];
 
 export function bridgePath(cwd: string): string {
@@ -58,10 +117,24 @@ function normalizePlaceholder(value?: string): string {
   return trimmed && trimmed.length > 0 ? trimmed : "_(none)_";
 }
 
+export function findSecrets(text: string): string[] {
+  const found = new Set<string>();
+  for (const rule of SECRET_RULES) {
+    rule.pattern.lastIndex = 0;
+    if (rule.pattern.test(text)) {
+      found.add(rule.label);
+    }
+    rule.pattern.lastIndex = 0;
+  }
+  return [...found];
+}
+
 function assertNoCredentialShapedContent(doc: BridgeDocument): void {
-  const rendered = renderBridge(doc);
-  if (SECRET_PATTERNS.some((pattern) => pattern.test(rendered))) {
-    throw new Error("Refusing to write .harness/bridge.md because it contains credential-shaped content.");
+  const found = findSecrets(renderBridge(doc));
+  if (found.length > 0) {
+    throw new Error(
+      `Refusing to write .harness/bridge.md because it contains credential-shaped content (${found.join(", ")}). Redact it and reference where the value lives instead.`
+    );
   }
 }
 
@@ -97,8 +170,19 @@ export function renderBridge(doc: BridgeDocument): string {
   ];
 
   for (const section of ALL_SECTIONS) {
-    const value = doc.sections[section] ?? (section === "Notes for the next agent" ? "" : "_(none)_");
-    lines.push(`## ${section}`, value.trimEnd(), "");
+    const isRequired = REQUIRED_SECTIONS.includes(section);
+    const value = doc.sections[section];
+    if (!isRequired && section !== NOTES_SECTION && !value?.trim()) {
+      continue;
+    }
+    lines.push(`## ${section}`, (value ?? (isRequired ? "_(none)_" : "")).trimEnd(), "");
+  }
+
+  // Forward compatibility: keep sections this version does not know about.
+  for (const [section, value] of Object.entries(doc.sections)) {
+    if (!ALL_SECTIONS.includes(section)) {
+      lines.push(`## ${section}`, value.trimEnd(), "");
+    }
   }
 
   return `${lines.join("\n").trimEnd()}\n`;
@@ -239,7 +323,7 @@ export function initBridge(options: InitOptions): BridgeDocument {
       "Decisions & rationale": "_(none)_",
       "Open questions": "_(none)_",
       "Files touched": "_(none)_",
-      "Notes for the next agent": ""
+      [NOTES_SECTION]: ""
     }
   };
 
@@ -254,6 +338,15 @@ function appendDecisions(existing: string, additions: string[]): string {
   }
   const prefix = existing.trim() === "_(none)_" || existing.trim() === "_(none yet)_" ? "" : `${existing.trimEnd()}\n`;
   return `${prefix}${cleaned.map((item) => (item.startsWith("- ") ? item : `- ${item}`)).join("\n")}`;
+}
+
+function setOptionalSection(doc: BridgeDocument, section: string, value: string): void {
+  const trimmed = value.trim();
+  if (trimmed) {
+    doc.sections[section] = trimmed;
+  } else {
+    delete doc.sections[section];
+  }
 }
 
 export function checkpointBridge(options: CheckpointOptions): BridgeDocument {
@@ -289,7 +382,10 @@ export function checkpointBridge(options: CheckpointOptions): BridgeDocument {
   }
   if (options.openQuestions !== undefined) next.sections["Open questions"] = normalizePlaceholder(options.openQuestions);
   if (options.filesTouched !== undefined) next.sections["Files touched"] = normalizePlaceholder(options.filesTouched);
-  if (options.notes !== undefined) next.sections["Notes for the next agent"] = options.notes.trim();
+  if (options.notes !== undefined) next.sections[NOTES_SECTION] = options.notes.trim();
+  if (options.focus !== undefined) setOptionalSection(next, FOCUS_SECTION, options.focus);
+  if (options.references !== undefined) setOptionalSection(next, REFERENCES_SECTION, options.references);
+  if (options.suggestedSkills !== undefined) setOptionalSection(next, SUGGESTED_SKILLS_SECTION, options.suggestedSkills);
 
   writeBridge(options.cwd, next);
   return next;
@@ -299,8 +395,9 @@ export function getStatus(cwd: string): StatusResult {
   const git = getGitState(cwd);
   const file = bridgePath(cwd);
   const exists = fs.existsSync(file);
+  const ignoredByGit = isIgnoredByGit(cwd, BRIDGE_RELATIVE_PATH);
   if (!exists) {
-    return { exists, path: file, git, discrepancies: ["Bridge file is missing."] };
+    return { exists, path: file, git, ignoredByGit, discrepancies: ["Bridge file is missing."] };
   }
 
   const markdown = fs.readFileSync(file, "utf8");
@@ -309,7 +406,7 @@ export function getStatus(cwd: string): StatusResult {
   try {
     bridge = parseBridge(markdown);
   } catch {
-    return { exists, path: file, validation, git, discrepancies: ["Bridge file is present but cannot be parsed."] };
+    return { exists, path: file, validation, git, ignoredByGit, discrepancies: ["Bridge file is present but cannot be parsed."] };
   }
   const discrepancies: string[] = [];
 
@@ -325,7 +422,7 @@ export function getStatus(cwd: string): StatusResult {
     status: gitStatusForFile(cwd, touchedFile)
   }));
 
-  return { exists, path: file, validation, bridge, git, discrepancies, gitLogSinceBridgeHead, fileGrounding };
+  return { exists, path: file, validation, bridge, git, ignoredByGit, discrepancies, gitLogSinceBridgeHead, fileGrounding };
 }
 
 function extractFilesTouched(filesTouched: string | undefined): string[] {
@@ -375,13 +472,28 @@ export function summarizeForConsume(cwd: string): string {
           .join("\n")}`
       : "";
 
+  const optional = (label: string, section: string) => {
+    const value = bridge.sections[section]?.trim();
+    return value && value !== "_(none)_" && value !== "_(none yet)_" ? `${label}:\n${value}` : "";
+  };
+  const skillsHint = optional("Suggested skills", SUGGESTED_SKILLS_SECTION)
+    ? "Load the suggested skills (or the closest equivalents available to you) before starting the next action."
+    : "";
+
   return [
     `Goal:\n${bridge.sections.Goal}`,
+    optional("Next session focus", FOCUS_SECTION),
     `Done / plan:\n${bridge.sections.Plan}`,
     `Next action:\n${bridge.sections["Next action"]}`,
+    optional("Decisions already made (do not re-decide)", "Decisions & rationale"),
+    optional("Open questions", "Open questions"),
     `Files touched:\n${bridge.sections["Files touched"]}`,
+    optional("References (read these instead of guessing)", REFERENCES_SECTION),
+    optional("Suggested skills", SUGGESTED_SKILLS_SECTION),
+    optional("Notes for the next agent", NOTES_SECTION),
     gitLogText,
     groundingText,
+    skillsHint,
     "Stop here and wait for explicit user confirmation before executing the next action.",
     discrepancyText.trim()
   ]
@@ -398,9 +510,27 @@ function indent(text: string, prefix: string): string {
 }
 
 export function redactSecrets(text: string): string {
-  return text
-    .replace(/\b(sk-[A-Za-z0-9_-]{20,})\b/g, "[REDACTED_OPENAI_KEY]")
-    .replace(/\b([A-Za-z0-9_-]*token[A-Za-z0-9_-]*\s*[:=]\s*)[^\s"'`]+/gi, "$1[REDACTED]")
-    .replace(/\b([A-Za-z0-9_-]*password[A-Za-z0-9_-]*\s*[:=]\s*)[^\s"'`]+/gi, "$1[REDACTED]")
-    .replace(/\b([A-Za-z0-9_-]*api[_-]?key[A-Za-z0-9_-]*\s*[:=]\s*)[^\s"'`]+/gi, "$1[REDACTED]");
+  return SECRET_RULES.reduce((result, rule) => {
+    rule.pattern.lastIndex = 0;
+    return result.replace(rule.pattern, rule.replacement);
+  }, text);
+}
+
+/**
+ * Keep the bridge out of git without touching the shared .gitignore, by adding
+ * `.harness/` to this clone's `.git/info/exclude`. Returns the exclude file path.
+ */
+export function excludeBridgeFromGit(cwd: string): string {
+  const excludeFile = gitPath(cwd, "info/exclude");
+  if (!excludeFile) {
+    throw new Error("Cannot keep the bridge local-only: this directory is not inside a git repository.");
+  }
+  fs.mkdirSync(path.dirname(excludeFile), { recursive: true });
+  const existing = fs.existsSync(excludeFile) ? fs.readFileSync(excludeFile, "utf8") : "";
+  const alreadyExcluded = existing.split("\n").some((line) => [".harness", ".harness/", "/.harness", "/.harness/"].includes(line.trim()));
+  if (!alreadyExcluded) {
+    const separator = existing.length > 0 && !existing.endsWith("\n") ? "\n" : "";
+    fs.writeFileSync(excludeFile, `${existing}${separator}# Harness Bridge (local-only handoffs)\n/.harness/\n`, "utf8");
+  }
+  return excludeFile;
 }

@@ -6,7 +6,7 @@
 
 **The fix.** The agent maintains a tiny markdown file at `.harness/bridge.md` while it works. When any session ends, a new session — same provider or different — reads that file, grounds itself in your repo's git state, restates what's going on, waits for your confirmation, and continues exactly where the previous one left off.
 
-**What you install.** Recommended: configure the local MCP server so your coding agent can call bridge tools directly. If your agent does not support MCP, use the prompt-only fallback. In both modes, `.harness/bridge.md` stays the source of truth.
+**What you install.** Three agent skills: `/handoff` to finalize a handoff, `/pickup` to resume, and `harness-bridge` to set up and maintain the bridge. Optionally add a local MCP server that validates the bridge and grounds it in git. Install them as a Claude Code plugin, from GitHub with `npx skills`, or from npm. If your agent supports neither skills nor MCP, paste the prompts instead. In every mode, `.harness/bridge.md` stays the source of truth.
 
 **Companion product.** Looking for the long-lived knowledge-base workflow (research, design rationale, decisions)? That now lives in its own package, [`@codemeall/harness-wiki`](https://github.com/codemeall/harness-wiki). Harness Bridge tracks the current task; Harness Wiki tracks the durable context around the work.
 
@@ -20,7 +20,7 @@
 - [Install](#install)
 - [Use it](#use-it)
 - [Common scenarios](#common-scenarios)
-- [Bridge prompt reference](#bridge-prompt-reference)
+- [Skills & prompt reference](#skills--prompt-reference)
 - [Provider support (bridge)](#provider-support-bridge)
 - [MCP integration](#mcp-integration)
 - [MCP usage guide](./docs/mcp-usage.md)
@@ -63,6 +63,9 @@ Public API endpoints currently have no rate limiting; abuse from a single token
 can degrade service for everyone. We're adding a per-token token-bucket limiter
 with configurable defaults (60/min, burst 20) and per-route overrides.
 
+## Next session focus
+Finish per-route overrides; the Redis integration test can wait.
+
 ## Plan
 - [x] Define RateLimiter interface
 - [x] In-memory TokenBucket for unit tests
@@ -88,6 +91,13 @@ POST /v1/messages which needs 10/min, burst 3.
 - src/middleware/rate-limit/* — new module
 - src/server.ts — wired at line 42; default config only
 - tests/rate-limit.test.ts — in-memory covered; Redis pending
+
+## References
+- docs/adr/0007-rate-limiting.md — full design and the alternatives we rejected
+- https://github.com/example/example-api/issues/212 — route limits agreed with product
+
+## Suggested skills
+- tdd — each override lands with a failing test first
 ```
 
 See [`examples/`](./examples/) for three more realistic bridges (mid-feature, mid-bugfix with `dirty: true`, and one recovered from a crashed session's transcript).
@@ -119,19 +129,53 @@ When the on-disk bridge isn't enough (stale, missing, or suspect), a separate **
 
 ## Install
 
-The easiest path is MCP. You configure the server once per agent/editor, then initialize each repo with a normal instruction like "Use Harness Bridge to initialize this repo."
+Pick one way to get the skills, then add the MCP server if your agent supports it.
 
-### Option A — MCP (recommended)
+### Option A: Claude Code plugin (skills and MCP in one step)
 
-Configure Harness Bridge as a local stdio MCP server:
+Inside Claude Code:
 
-```bash
-npx -y @codemeall/harness-bridge mcp
+```text
+/plugin marketplace add codemeall/harness-bridge
+/plugin install harness-bridge@codemeall
 ```
 
-You normally do not run that command by hand; add it to your agent's MCP config so the agent starts it when needed. See [`docs/mcp-usage.md`](./docs/mcp-usage.md) and [`providers/mcp.md`](./providers/mcp.md) for Claude Code, Cursor, Codex, Gemini CLI, and Antigravity setup.
+This installs the three skills and the MCP server. Plugin skills are namespaced, so you run them as `/harness-bridge:handoff` and `/harness-bridge:pickup`.
 
-After MCP is connected, open your target repo in the agent and say:
+### Option B: skills from GitHub (Claude Code, Codex, Cursor, Gemini CLI, and more)
+
+```bash
+npx skills@latest add codemeall/harness-bridge          # pick agents and scope interactively
+npx skills@latest add codemeall/harness-bridge -g -y    # all skills, user-level, no prompts
+npx skills@latest add codemeall/harness-bridge --skill handoff --skill pickup
+```
+
+The [`skills`](https://github.com/vercel-labs/skills) CLI detects your installed agents and puts the skills where each one looks for them.
+
+### Option C: skills from npm
+
+```bash
+npx -y @codemeall/harness-bridge install-skills                  # ~/.claude/skills (all projects)
+npx -y @codemeall/harness-bridge install-skills --project        # ./.claude/skills (this repo, commit it for your team)
+npx -y @codemeall/harness-bridge install-skills --agent codex    # ~/.codex/skills (also: cursor, gemini-cli)
+npx -y @codemeall/harness-bridge install-skills --dir <path>     # any other skills directory
+```
+
+Re-run it to upgrade. It never overwrites a different skill with the same name (for example, another author's `handoff`) unless you pass `--force`. `uninstall-skills` takes the same flags and removes them.
+
+### Add the MCP server (recommended with options B and C)
+
+The skills work without it by editing the file directly. The MCP server adds schema validation, a secret check before every write, and git grounding on resume.
+
+```bash
+claude mcp add --transport stdio harness-bridge -- npx -y @codemeall/harness-bridge mcp
+```
+
+See [`docs/mcp-usage.md`](./docs/mcp-usage.md) and [`providers/mcp.md`](./providers/mcp.md) for Cursor, Codex, Gemini CLI, and Antigravity.
+
+### Initialize a repo
+
+Open the target repo in your agent and say:
 
 ```text
 Use Harness Bridge to initialize this repo for handoffs.
@@ -140,28 +184,13 @@ Title: <one-line task title>
 Goal: <2-4 sentences describing what we are trying to finish and why>
 ```
 
-The agent calls `bridge_init`, creates `.harness/bridge.md`, and can install the maintainer snippet into the right provider instructions file when requested.
+The agent creates `.harness/bridge.md`. Ask it to "also install the maintainer rules" to append them to `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `.cursor/rules/harness-bridge.md`, so every future session keeps the bridge current. If you don't want handoff notes in commits or PRs, ask to "keep the bridge local-only": it adds `/.harness/` to this clone's `.git/info/exclude`, and `.gitignore` is left untouched.
 
-### Option B — prompt fallback
+### Prompt-only fallback (no skills, no MCP)
 
-Use this when your agent cannot use MCP. Open your AI coding agent in the target repo and paste the contents of [`prompts/init.md`](./prompts/init.md) as your first message. The agent will:
+Paste the contents of [`prompts/init.md`](./prompts/init.md) as your first message. The agent creates `.harness/`, appends the maintainer snippet to your provider's instructions file, and scaffolds `.harness/bridge.md`. Review the diff and commit when ready.
 
-1. Create `.harness/` at the repo root.
-2. Append the maintainer snippet to your provider's instructions file (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or create `.cursor/rules/harness-bridge.md`).
-3. Scaffold a starter `.harness/bridge.md`.
-
-Review the diff. Commit when ready.
-
-### Option C — manual
-
-1. Open [`prompts/maintainer.md`](./prompts/maintainer.md).
-2. Copy everything between `--- begin snippet ---` and `--- end snippet ---`.
-3. Paste it into your provider's instructions file:
-   - Claude Code → append to `CLAUDE.md` at your repo root.
-   - Codex → append to `AGENTS.md`.
-   - Gemini CLI → append to `GEMINI.md`.
-   - Cursor → save as a new file `.cursor/rules/harness-bridge.md`.
-4. Create an empty `.harness/` directory. The agent will populate `bridge.md` on its first non-trivial task.
+To do it by hand instead, copy everything between `--- begin snippet ---` and `--- end snippet ---` in [`prompts/maintainer.md`](./prompts/maintainer.md) into `CLAUDE.md` (Claude Code), `AGENTS.md` (Codex), `GEMINI.md` (Gemini CLI), or a new `.cursor/rules/harness-bridge.md` (Cursor), and create an empty `.harness/` directory.
 
 ---
 
@@ -171,37 +200,41 @@ Once installed, the everyday loop is short:
 
 ### 1. Just work
 
-Start a session, give it a task. The agent maintains `.harness/bridge.md` at checkpoints as it goes. You can ignore the file most of the time — `git diff .harness/bridge.md` shows what it's tracking if you ever want to peek.
+Start a session and give it a task. The agent updates `.harness/bridge.md` at checkpoints as it goes. You can mostly ignore the file; `git diff .harness/bridge.md` shows what it's tracking.
 
 ### 2. End a session (planned or not)
 
-If you're closing the session deliberately and want a clean handoff, say:
+When you're closing the session deliberately, run:
 
 ```text
-Produce a Harness Bridge handoff.
+/handoff
+/handoff write the Redis integration test and get CI green
 ```
 
-With MCP, the agent calls `bridge_produce`. In prompt-only mode, paste [`prompts/producer.md`](./prompts/producer.md). Either way, this is a touch-up pass that verifies nothing slipped past the last checkpoint.
+The optional argument says what the next session is for. The handoff is then built around it: it records the **Next session focus**, points **Next action** at the first step toward it, links existing specs, issues, and PRs under **References** instead of copying them, and lists the **Suggested skills** the next agent should load. It ends by telling you exactly how to resume.
 
-If the session dies unexpectedly, you can skip this. The bridge is already current to the last checkpoint.
+Without the skills, say `Produce a Harness Bridge handoff.` (MCP), or paste [`prompts/producer.md`](./prompts/producer.md).
+
+If the session dies unexpectedly, skip this step. The bridge is already current to the last checkpoint.
 
 ### 3. Resume in a new session
 
-In a fresh session — same provider or a different one — say:
+In a fresh session, same provider or a different one:
 
 ```text
-Consume the Harness Bridge and restate where we are.
+/pickup
 ```
 
-With MCP, the agent calls `bridge_consume`. In prompt-only mode, paste [`prompts/consumer.md`](./prompts/consumer.md). The agent will:
+Or say `Consume the Harness Bridge and restate where we are.`, or paste [`prompts/consumer.md`](./prompts/consumer.md). The agent will:
 
 1. Read `.harness/bridge.md`.
-2. Run `git status` / `git log` to ground itself in real state.
-3. **Restate the goal, what's done, what's next — in its own words.**
-4. **Wait for your confirmation.**
-5. Then continue execution and resume maintaining the bridge.
+2. Run `git status` and `git log` to check the bridge against the real repo state.
+3. Load the suggested skills and read the references that the next action needs.
+4. **Restate the goal, what's done, and what's next, in its own words.**
+5. **Wait for your confirmation.**
+6. Then continue, and keep maintaining the bridge.
 
-The restate-and-wait step is non-negotiable. It's the cheapest way to catch a misread before it becomes 5,000 tokens of wrong-direction work.
+The restate-and-wait step is non-negotiable. It's the cheapest way to catch a misread before it becomes 5,000 tokens of work in the wrong direction.
 
 ---
 
@@ -209,15 +242,15 @@ The restate-and-wait step is non-negotiable. It's the cheapest way to catch a mi
 
 ### "I want to switch from Claude Code to Codex mid-task."
 
-1. In the source session, say `Produce a Harness Bridge handoff` to finalize the bridge.
+1. In the source session, run `/handoff` (or say `Produce a Harness Bridge handoff`) to finalize the bridge.
 2. Commit. (Or just stage — the file's on disk either way.)
-3. Open Codex in the same repo. Say `Consume the Harness Bridge and restate where we are`. Confirm the restate. Continue.
+3. Open Codex in the same repo. Run `/pickup` (or say `Consume the Harness Bridge and restate where we are`). Confirm the restate. Continue.
 
 ### "My session crashed and I didn't run the producer prompt."
 
 If you were using checkpoint cadence (the default), the bridge is already current to the last checkpoint — usually a few minutes ago.
 
-1. Open a new session. Say `Consume the Harness Bridge and restate where we are` (or paste `prompts/consumer.md` in prompt-only mode).
+1. Open a new session. Run `/pickup` (or say `Consume the Harness Bridge and restate where we are`, or paste `prompts/consumer.md` in prompt-only mode).
 2. The restate will show you what state the bridge was in at last checkpoint. If that's close enough to where the session actually died, just continue.
 3. If the bridge is missing the last few minutes, ask the agent to run recovery in `since` mode (or paste `prompts/recover.md` in prompt-only mode) — it tops up the bridge from the dead session's transcript.
 
@@ -229,6 +262,10 @@ Use the recovery flow in `full` mode. With MCP, ask the agent to recover the bri
 
 Ask the agent to verify the bridge against transcript evidence. In prompt-only mode, paste `prompts/recover.md` with mode `verify`. The agent diffs the bridge against the transcript and reports discrepancies. Read-only — it won't modify the file.
 
+### "I don't want handoff notes in my commits or PRs."
+
+Ask the agent to keep the bridge local-only (`bridge_init` with `localOnly: true`, or `harness-bridge init --local`). It adds `/.harness/` to this clone's `.git/info/exclude`, so the shared `.gitignore` stays unchanged. The bridge still survives crashes because it's on disk; it just isn't committed.
+
 ### "I want to slow down bridge updates — this task is exploratory and I don't want the overhead."
 
 Tell the agent: *"Use lazy cadence for this task."* The agent will update the bridge only on explicit request, or when context fills past ~70%.
@@ -239,9 +276,17 @@ Tell the agent: *"Use aggressive cadence — this is critical."* The agent will 
 
 ---
 
-## Bridge prompt reference
+## Skills & prompt reference
 
-Harness Bridge uses six operational prompts:
+The skills are the easiest way in. The prompts below are the fallback for agents that support neither skills nor MCP, and the skills follow the same procedures.
+
+| Skill | Invoke | Purpose |
+|---|---|---|
+| [`handoff`](./skills/handoff/SKILL.md) | `/handoff [what the next session is for]` (user-invoked only) | Finalize the bridge, tailored to the next session's focus |
+| [`pickup`](./skills/pickup/SKILL.md) | `/pickup`, or ask to continue where the last session left off | Check the bridge against git, load suggested skills, restate, wait, resume |
+| [`harness-bridge`](./skills/harness-bridge/SKILL.md) | loads automatically for bridge work | Initialize, checkpoint, recover, validate, remove |
+
+Harness Bridge also ships six operational prompts:
 
 | Prompt | When to use it | Purpose |
 |---|---|---|
@@ -316,13 +361,17 @@ Bridges can contain your goal, decisions, file paths, and short notes. They **mu
 
 v1 assumes **serial handoffs**: one agent works, then another. Concurrent multi-agent edits are an open problem deferred to v2. If you accidentally run two sessions against the same bridge simultaneously, git merge-conflict semantics apply — it's a markdown file like any other.
 
+### How is this different from a one-shot handoff document?
+
+A one-shot handoff (a skill that summarises the chat into a temp file at the end of the session) is great when you remember to run it. Harness Bridge adopts its best ideas: an optional next-session focus, **References** instead of copied context, **Suggested skills** for the next agent, and redaction. It also adds three things a one-shot document can't give you. The bridge is kept current *during* the session, so a crash or token limit doesn't lose it. The next agent checks it against git before acting. And it waits for your confirmation before it starts.
+
 ### Why not just use the conversation transcript directly?
 
 You can — recovery mode reads transcripts. But transcripts are dense, full of dead ends, and often massive (tens of thousands of tokens). The bridge is the **distilled state** the next agent actually needs: ~30 lines instead of ~30K. Transcripts are the backup; the bridge is the primary source.
 
 ### Is this an MCP server / CLI / extension?
 
-The original workflow is a documented convention plus markdown files. The MCP server and CLI let developer agents use the same workflow without copy-pasting every operational prompt.
+The core is a documented convention plus markdown files. The skills, MCP server, and CLI let agents follow that workflow without copy-pasting prompts. The package is on npm as [`@codemeall/harness-bridge`](https://www.npmjs.com/package/@codemeall/harness-bridge), and this repo is also a Claude Code plugin marketplace.
 
 ### Will this work in [tool not listed]?
 
@@ -338,7 +387,7 @@ Lineage from the original concept note. The name is preserved through v1; we may
 
 **Harness Bridge is:**
 - A schema for one markdown file (`harness-bridge/v1`).
-- Six short prompts that drive the agent's behavior.
+- Three agent skills (`/handoff`, `/pickup`, `harness-bridge`) and six short fallback prompts that drive the agent's behavior.
 - A set of provider-specific notes for where to install and where to find transcripts.
 - Provider-agnostic by design.
 
@@ -374,7 +423,6 @@ Re-installation is always possible via `prompts/init.md`.
 
 These are real ideas, deliberately out of scope until v1 proves the schema:
 
-- Slash-command wrappers per provider (`/bridge-init`, `/bridge-save`, etc.).
 - Automated round-trip test harness driving headless agents.
 - Multi-agent concurrent edit support and state reconciliation.
 - Multi-hop chains (agent A → B → C).

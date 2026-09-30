@@ -1,13 +1,14 @@
 {
   "name": "@codemeall/harness-bridge",
-  "version": "0.2.0",
-  "description": "MCP-first local tooling for Harness Bridge markdown handoffs.",
+  "version": "0.3.0",
+  "description": "Hand off AI coding-agent sessions through one markdown file: /handoff and /pickup skills plus a local MCP server.",
   "type": "module",
   "bin": {
     "harness-bridge": "dist/cli.js"
   },
   "files": [
     "dist",
+    "skills",
     "docs",
     "prompts",
     "providers",
@@ -34,5 +35,21 @@
   "engines": {
     "node": ">=20"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "agents",
+    "handoff",
+    "claude-code",
+    "codex",
+    "cursor",
+    "gemini",
+    "mcp",
+    "skills"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codemeall/harness-bridge.git"
+  },
+  "homepage": "https://github.com/codemeall/harness-bridge#readme"
 }

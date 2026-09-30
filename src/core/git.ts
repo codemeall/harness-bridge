@@ -77,3 +77,23 @@ export function gitLogRange(cwd: string, fromHead: string, toHead = "HEAD"): str
     return "";
   }
 }
+
+/** Absolute path of a file inside the git dir (handles worktrees), or undefined outside git. */
+export function gitPath(cwd: string, name: string): string | undefined {
+  const root = getRepoRoot(cwd);
+  try {
+    return path.resolve(root, runGit(root, ["rev-parse", "--git-path", name]));
+  } catch {
+    return undefined;
+  }
+}
+
+export function isIgnoredByGit(cwd: string, file: string): boolean {
+  const root = getRepoRoot(cwd);
+  try {
+    runGit(root, ["check-ignore", "-q", "--no-index", "--", file]);
+    return true;
+  } catch {
+    return false;
+  }
+}

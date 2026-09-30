@@ -39,6 +39,8 @@ export interface StatusResult {
   validation?: ValidationResult;
   bridge?: BridgeDocument;
   git: GitState;
+  /** True when .harness/bridge.md is ignored by git (local-only handoffs). */
+  ignoredByGit: boolean;
   discrepancies: string[];
   gitLogSinceBridgeHead?: string;
   fileGrounding?: FileGrounding[];
@@ -71,5 +73,11 @@ export interface CheckpointOptions {
   openQuestions?: string;
   filesTouched?: string;
   notes?: string;
+  /** What the next session will focus on; replaces the "Next session focus" section. */
+  focus?: string;
+  /** Links/paths to specs, ADRs, issues, PRs, commits the next agent should read instead of a copy. */
+  references?: string;
+  /** Skills (or tools) the next agent should load before starting. */
+  suggestedSkills?: string;
   cadence?: Cadence;
 }

@@ -39,7 +39,9 @@ For the prompt-to-tool conformance map, see [`docs/mcp-prompt-alignment.md`](../
 
 All bridge tools accept an optional `cwd` argument. Agents should pass the absolute workspace path when the MCP client exposes it, because some editors start stdio MCP servers outside the active project directory. Write tools include the absolute `.harness/bridge.md` path in their response.
 
-`bridge_produce` rejects empty no-op calls unless the caller sets `confirmNoChanges: true` after verifying the existing bridge is already current. Normal producer calls should include the current handoff fields such as `plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions.
+`bridge_produce` rejects empty no-op calls unless the caller sets `confirmNoChanges: true` after verifying the existing bridge is already current. Normal producer calls should include the current handoff fields such as `plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions, plus the optional `focus` (next-session focus), `references` (links instead of copied context), and `suggestedSkills`.
+
+`bridge_init` accepts `localOnly: true` to keep the bridge out of git via `.git/info/exclude`. `bridge_status` reports `ignoredByGit`.
 
 > The LLM Wiki knowledge-vault tools now ship separately in [`@codemeall/harness-wiki`](https://github.com/codemeall/harness-wiki).
 
@@ -51,7 +53,7 @@ All bridge tools accept an optional `cwd` argument. Agents should pass the absol
 claude mcp add --transport stdio harness-bridge -- npx -y @codemeall/harness-bridge mcp
 ```
 
-Optional: copy `templates/claude/SKILL.md` to `.claude/skills/harness-bridge/SKILL.md` for workflow guidance.
+Add the `/handoff`, `/pickup`, and `harness-bridge` skills with `npx -y @codemeall/harness-bridge install-skills` (or `npx skills@latest add codemeall/harness-bridge`). To get the MCP server and the skills together, install the plugin instead: `/plugin marketplace add codemeall/harness-bridge`, then `/plugin install harness-bridge@codemeall`.
 
 ### Cursor
 
