@@ -162,6 +162,34 @@ describe("bridge core", () => {
     ).toThrow(/credential-shaped/);
   });
 
+  it("reports no discrepancies right after init (bridge file does not make the repo dirty)", () => {
+    initBridge({ cwd: tempDir, generatedBy: "vitest", title: "Test handoff", goal: "Fresh bridge." });
+    expect(getStatus(tempDir).discrepancies).toEqual([]);
+  });
+
+  it("parses bridges with CRLF line endings", () => {
+    const doc = initBridge({ cwd: tempDir, generatedBy: "vitest", title: "CRLF", goal: "Windows editors." });
+    const crlf = renderBridge(doc).replace(/\n/g, "\r\n");
+    expect(validateBridge(crlf)).toMatchObject({ valid: true });
+    expect(parseBridge(crlf).sections.Goal).toBe("Windows editors.");
+  });
+
+  it("rejects a cwd that does not exist instead of creating it", () => {
+    const missing = path.join(tempDir, "does-not-exist");
+    expect(() => initBridge({ cwd: missing, generatedBy: "vitest", title: "x", goal: "y" })).toThrow(/does not exist/);
+    expect(fs.existsSync(missing)).toBe(false);
+  });
+
+  it("caps file-grounding diffs so consume output stays small", () => {
+    initBridge({ cwd: tempDir, generatedBy: "vitest", title: "Big diff", goal: "Bound the output." });
+    const big = Array.from({ length: 5000 }, (_, i) => `line ${i} ${"x".repeat(40)}`).join("\n");
+    fs.writeFileSync(path.join(tempDir, "README.md"), big, "utf8");
+    checkpointBridge({ cwd: tempDir, generatedBy: "vitest", filesTouched: "- `README.md` — rewritten" });
+    const summary = summarizeForConsume(tempDir);
+    expect(summary.length).toBeLessThan(12000);
+    expect(summary).toContain("diff truncated");
+  });
+
   it("round-trips unknown frontmatter fields", () => {
     const doc = initBridge({
       cwd: tempDir,

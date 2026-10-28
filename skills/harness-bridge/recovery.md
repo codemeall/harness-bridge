@@ -1,30 +1,45 @@
 # Recovering a bridge from a transcript
 
-Use this when `.harness/bridge.md` is missing, stale, or suspect. You rebuild or audit the bridge from the previous session's transcript.
+Use this when `.harness/bridge.md` is missing, stale or suspect. If a whole session died (usage limit, crash) and the user wants to continue its work, use the `recover-session` skill instead; it covers the full flow.
 
 | Mode | When | Writes the bridge? |
 |---|---|---|
-| `since` | The bridge exists but missed the last part of the session (the everyday case) | Yes, after showing the diff |
+| `since` | The bridge exists but missed the last part of the session (the everyday case) | Yes, after showing the changes |
 | `full` | No usable bridge | Yes, after showing the proposed bridge |
-| `verify` | The bridge exists but may have drifted from what happened | No. Report only |
+| `verify` | The bridge exists but may have drifted from what happened | No, report only |
 
-## Where transcripts live
+## Get the evidence (deterministic, no raw transcript)
 
-| Agent | Location |
-|---|---|
-| Claude Code | `~/.claude/projects/<cwd with every / replaced by ->/*.jsonl`. Take the newest by mtime. |
-| Codex | `~/.codex/sessions/`. Take the newest session file for this project. |
-| Gemini CLI | Under `~/.gemini/` or `~/.config/gemini/`, depending on version. |
-| Cursor, Gemini Web | Not on disk. Ask the user to export or paste the chat. |
+1. **List sessions and let the user pick.**
+   - MCP: `session_list` with `cwd`.
+   - CLI: `harness-bridge sessions`.
 
-If you can't find the transcript, ask the user for its path.
+   Never take "the newest file" yourself: it may belong to another task or repo.
+2. **Build the recovery package.**
+   - MCP: `session_recover` with `session: <id>`.
+   - CLI: `harness-bridge recover <id>`.
 
-## Procedure
+   The package lists:
+   - the goal and the latest user messages;
+   - task state (claims from the transcript);
+   - files checked against git;
+   - command results;
+   - the *Bridge* section: whether the bridge is stale, events after `last_updated`, files it doesn't list, and tasks done but not ticked.
+3. **Need a detail?** Use `session_read` (or `harness-bridge transcript <id> --around <line>`) on the cited line numbers.
 
-1. Read the transcript in chunks. Skip large tool outputs (file dumps, build logs) and focus on user turns, assistant decisions, and tool calls that changed state. If it's over ~50K tokens, ask whether to limit it to a time range first.
-2. Redact as you go: no secrets, credentials, or personal data in the result.
-3. Apply the mode:
-   - `full`: write a new bridge from [template.md](template.md) with `generated_by: recovery-from-transcript`.
-   - `since`: take the events after the bridge's `last_updated` and patch Plan, Decisions (append only), Open questions, Files touched, and Next action. Bump `last_updated`.
-   - `verify`: report "Bridge says X; transcript shows Y". Don't modify anything.
-4. Show the result or diff and get the user's confirmation before writing. With MCP, call `bridge_recover` with `recoveredBridgeMarkdown` and `write: false` to validate, then `write: true` after confirmation.
+## Apply the mode
+
+- **`full`:** write a new bridge from [template.md](template.md) with `generated_by: recovery-from-transcript`. Validate with `bridge_recover` and `write: false`, show it to the user, then call again with `write: true`.
+- **`since`:** apply the *Bridge* section's gaps with `bridge_checkpoint`: Plan, `decisionsToAppend`, Open questions, Files touched, Next action.
+- **`verify`:** report "Bridge says X; transcript/repo shows Y". Modify nothing.
+
+Get the user's confirmation before any write.
+
+## Without the CLI or MCP
+
+1. Find the transcript, then confirm the file with the user.
+   - Claude Code: `~/.claude/projects/<cwd with every non-alphanumeric character replaced by ->/<session-id>.jsonl`.
+   - Codex: `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Line 1 records the `cwd`.
+   - Cursor and Antigravity: transcripts aren't readable files. Ask the user to export or paste the chat.
+2. Read the transcript in chunks. Skip tool outputs and `api-request*` records.
+3. Redact secrets as you go. If it's over ~50K tokens, ask to limit it to a time range first.

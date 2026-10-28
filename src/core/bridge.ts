@@ -10,6 +10,7 @@ import {
   gitStatusForFile,
   isIgnoredByGit
 } from "./git.js";
+import { secretLabels } from "./secrets.js";
 import type {
   BridgeDocument,
   BridgeFrontmatter,
@@ -64,45 +65,16 @@ const REQUIRED_FRONTMATTER = [
   "dirty"
 ];
 
-// Values that are references to a secret rather than the secret itself
-// (placeholders, env lookups, already-redacted markers).
-const NOT_A_LITERAL = String.raw`(?![<$\{\[(]|process\.env|os\.environ|env\.|REDACTED)`;
+/** Per-file and total caps for diffs inlined into status/consume output. */
+const MAX_DIFF_CHARS_PER_FILE = 2000;
+const MAX_DIFF_CHARS_TOTAL = 6000;
 
-const SECRET_RULES: Array<{ label: string; pattern: RegExp; replacement: string }> = [
-  {
-    label: "private key",
-    pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
-    replacement: "[REDACTED_PRIVATE_KEY]"
-  },
-  { label: "API key", pattern: /\bsk-[A-Za-z0-9_-]{20,}/g, replacement: "[REDACTED_API_KEY]" },
-  { label: "GitHub token", pattern: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b/g, replacement: "[REDACTED_GITHUB_TOKEN]" },
-  { label: "GitHub token", pattern: /\bgithub_pat_[A-Za-z0-9_]{22,}\b/g, replacement: "[REDACTED_GITHUB_TOKEN]" },
-  { label: "npm token", pattern: /\bnpm_[A-Za-z0-9]{36}\b/g, replacement: "[REDACTED_NPM_TOKEN]" },
-  { label: "AWS access key", pattern: /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, replacement: "[REDACTED_AWS_KEY]" },
-  { label: "Slack token", pattern: /\bxox[abprs]-[A-Za-z0-9-]{10,}/g, replacement: "[REDACTED_SLACK_TOKEN]" },
-  { label: "Google API key", pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g, replacement: "[REDACTED_GOOGLE_KEY]" },
-  {
-    label: "JWT",
-    pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
-    replacement: "[REDACTED_JWT]"
-  },
-  { label: "bearer token", pattern: /\b(Bearer\s+)[A-Za-z0-9._~+/-]{20,}=*/gi, replacement: "$1[REDACTED]" },
-  {
-    label: "URL credentials",
-    pattern: /\b([a-z][a-z0-9+.-]*:\/\/[^\s:@/]+:)[^\s@/]+@/gi,
-    replacement: "$1[REDACTED]@"
-  },
-  {
-    label: "credential assignment",
-    pattern: new RegExp(
-      String.raw`\b([A-Za-z0-9_-]*(?:token|secret|password|passwd|api[_-]?key|access[_-]?key)[A-Za-z0-9_-]*\s*[:=]\s*)` +
-        NOT_A_LITERAL +
-        String.raw`(?!\d+\b)[^\s"'\`]{6,}`,
-      "gi"
-    ),
-    replacement: "$1[REDACTED]"
-  }
-];
+export { redactSecrets } from "./secrets.js";
+
+/** Labels of credential-shaped content found in `text` (empty when clean). */
+export function findSecrets(text: string): string[] {
+  return secretLabels(text);
+}
 
 export function bridgePath(cwd: string): string {
   return path.join(getRepoRoot(cwd), BRIDGE_RELATIVE_PATH);
@@ -115,18 +87,6 @@ export function nowIso(): string {
 function normalizePlaceholder(value?: string): string {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : "_(none)_";
-}
-
-export function findSecrets(text: string): string[] {
-  const found = new Set<string>();
-  for (const rule of SECRET_RULES) {
-    rule.pattern.lastIndex = 0;
-    if (rule.pattern.test(text)) {
-      found.add(rule.label);
-    }
-    rule.pattern.lastIndex = 0;
-  }
-  return [...found];
 }
 
 function assertNoCredentialShapedContent(doc: BridgeDocument): void {
@@ -189,7 +149,7 @@ export function renderBridge(doc: BridgeDocument): string {
 }
 
 export function parseBridge(markdown: string): BridgeDocument {
-  const match = markdown.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  const match = markdown.replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
   if (!match) {
     throw new Error("Bridge must start with YAML frontmatter.");
   }
@@ -268,6 +228,10 @@ export function validateBridge(markdown: string): ValidationResult {
   }
 
   return { valid: errors.length === 0, errors, warnings };
+}
+
+export function bridgeExists(cwd: string): boolean {
+  return fs.existsSync(bridgePath(cwd));
 }
 
 export function readBridge(cwd: string): BridgeDocument | undefined {
@@ -416,13 +380,23 @@ export function getStatus(cwd: string): StatusResult {
   if (bridge.frontmatter.dirty !== git.dirty) discrepancies.push(`dirty: bridge=${bridge.frontmatter.dirty} git=${git.dirty}`);
 
   const gitLogSinceBridgeHead = bridge.frontmatter.head !== git.head ? gitLogRange(cwd, bridge.frontmatter.head) : "";
-  const fileGrounding = extractFilesTouched(bridge.sections["Files touched"]).map((touchedFile) => ({
-    file: touchedFile,
-    diffFromBridgeHead: gitDiffFromHead(cwd, bridge.frontmatter.head, touchedFile),
-    status: gitStatusForFile(cwd, touchedFile)
-  }));
+  let diffBudget = MAX_DIFF_CHARS_TOTAL;
+  const fileGrounding = extractFilesTouched(bridge.sections["Files touched"]).map((touchedFile) => {
+    const diff = boundDiff(gitDiffFromHead(cwd, bridge.frontmatter.head, touchedFile), Math.min(MAX_DIFF_CHARS_PER_FILE, diffBudget), bridge.frontmatter.head, touchedFile);
+    diffBudget = Math.max(0, diffBudget - diff.length);
+    return { file: touchedFile, diffFromBridgeHead: diff, status: gitStatusForFile(cwd, touchedFile) };
+  });
 
   return { exists, path: file, validation, bridge, git, ignoredByGit, discrepancies, gitLogSinceBridgeHead, fileGrounding };
+}
+
+function boundDiff(diff: string, limit: number, head: string, file: string): string {
+  if (diff.length <= limit) return diff;
+  const kept = diff.slice(0, limit);
+  const cut = kept.lastIndexOf("\n");
+  const shown = cut > 0 ? kept.slice(0, cut) : kept;
+  const hiddenLines = diff.slice(shown.length).split("\n").length;
+  return `${shown}\n… diff truncated (${hiddenLines} more lines); run \`git diff ${head} -- ${file}\` for the rest`;
 }
 
 function extractFilesTouched(filesTouched: string | undefined): string[] {
@@ -438,9 +412,9 @@ function extractFilesTouched(filesTouched: string | undefined): string[] {
       continue;
     }
 
-    const bulletPath = line.match(/^[-*]\s+([^\s]+)\s+/);
-    if (bulletPath) {
-      files.add(bulletPath[1]);
+    const bulletPath = line.match(/^[-*]\s+([^\s]+)/);
+    if (bulletPath && /[./]/.test(bulletPath[1]) && !bulletPath[1].startsWith("_(")) {
+      files.add(bulletPath[1].replace(/[,:;]$/, ""));
     }
   }
   return [...files];
@@ -509,12 +483,6 @@ function indent(text: string, prefix: string): string {
     .join("\n");
 }
 
-export function redactSecrets(text: string): string {
-  return SECRET_RULES.reduce((result, rule) => {
-    rule.pattern.lastIndex = 0;
-    return result.replace(rule.pattern, rule.replacement);
-  }, text);
-}
 
 /**
  * Keep the bridge out of git without touching the shared .gitignore, by adding

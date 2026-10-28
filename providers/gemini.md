@@ -1,5 +1,7 @@
 # Gemini · Harness Bridge
 
+> **Legacy.** Google moved Gemini CLI's individual users (free, AI Pro and Ultra) to the Antigravity CLI on 2026-06-18. See [`antigravity.md`](./antigravity.md). This page stays for enterprise and API-key users of Gemini CLI. `GEMINI.md` installation still works, and Antigravity also reads `GEMINI.md`.
+
 Notes specific to using Harness Bridge with [Gemini](https://gemini.google.com), Google's AI assistant family. v1 covers the **Gemini CLI** primarily; the web interface has gaps documented below.
 
 ## Instructions file
@@ -23,7 +25,7 @@ Install the `handoff`, `pickup`, and `harness-bridge` skills (invoke them the wa
 - `GEMINI.md` content should be self-contained — same self-contained constraint as `CLAUDE.md`.
 
 ## Round-trip status
-v1 targets (not yet measured):
+Not measured. Automatic transcript recovery is **not** implemented for Gemini CLI. Earlier targets (unverified):
 - **Gemini CLI: 6/6 — fully supported.**
 - **Gemini Web: ≥3/6 — partially supported** (Tests A, B, C expected to pass; Tests D and E require manual transcript export; Test F can run on manually exported transcripts).
 

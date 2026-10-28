@@ -1,8 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import path from "node:path";
 import {
+  bridgeExists,
   bridgePath,
   checkpointBridge,
   excludeBridgeFromGit,
@@ -15,8 +15,13 @@ import {
   validateBridge,
   writeBridge
 } from "../core/bridge.js";
-import { getRepoRoot } from "../core/git.js";
+import { RULES_TARGETS, installMaintainerRules } from "../core/instructions.js";
+import { resolveWorkspace } from "../core/git.js";
 import { PACKAGE_VERSION } from "../core/version.js";
+import { detectDestinations, parseDestination } from "../recovery/destinations.js";
+import { buildRecoveryPackage, listRecoveryPackages, writeRecoveryPackage } from "../recovery/package.js";
+import { readTranscriptSlice } from "../recovery/slice.js";
+import { listSessions, parseProvider } from "../sessions/index.js";
 import fs from "node:fs";
 
 const PROMPT_FILES = {
@@ -48,8 +53,12 @@ function jsonResponse(value: unknown) {
 }
 
 function targetCwd(defaultCwd: string, cwd?: string): string {
-  return cwd ? path.resolve(cwd) : defaultCwd;
+  return resolveWorkspace(cwd ?? defaultCwd);
 }
+
+const cwdArg = z.string().optional().describe("Absolute workspace path. Defaults to the MCP server cwd.");
+const cadenceArg = z.enum(["checkpoint", "lazy", "aggressive"]);
+
 
 function hasBridgePatch(args: {
   title?: string;
@@ -98,43 +107,6 @@ function promptMessage(name: PromptName) {
   };
 }
 
-function extractMaintainerSnippet(): string {
-  const maintainer = readPrompt("maintainer");
-  const match = maintainer.match(/--- begin snippet ---\n([\s\S]*?)\n--- end snippet ---/);
-  if (!match) {
-    throw new Error("Could not find maintainer snippet markers in prompts/maintainer.md.");
-  }
-  return match[1].trimEnd();
-}
-
-function installProviderInstructions(cwd: string, provider: "claude-code" | "codex" | "gemini-cli" | "cursor"): string {
-  const root = getRepoRoot(cwd);
-  const snippet = extractMaintainerSnippet();
-
-  if (provider === "cursor") {
-    const cursorRule = path.join(root, ".cursor/rules/harness-bridge.md");
-    fs.mkdirSync(path.dirname(cursorRule), { recursive: true });
-    if (fs.existsSync(cursorRule) && fs.readFileSync(cursorRule, "utf8").includes("## Harness Bridge — keep .harness/bridge.md current")) {
-      return `${cursorRule} already contains Harness Bridge instructions.`;
-    }
-    fs.writeFileSync(cursorRule, `${snippet}\n`, "utf8");
-    return `Created ${cursorRule}.`;
-  }
-
-  const instructionFile =
-    provider === "claude-code" ? "CLAUDE.md" : provider === "codex" ? "AGENTS.md" : "GEMINI.md";
-  const target = path.join(root, instructionFile);
-  const existing = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
-  if (existing.includes("## Harness Bridge — keep .harness/bridge.md current")) {
-    return `${target} already contains Harness Bridge instructions.`;
-  }
-
-  const separator = existing.trim().length > 0 ? "\n\n" : "";
-  fs.writeFileSync(target, `${existing.trimEnd()}${separator}${snippet}\n`, "utf8");
-  return `Updated ${target}.`;
-}
-
-const cwdArg = z.string().optional().describe("Absolute path to the target workspace repo. Defaults to the MCP server cwd.");
 
 const handoffFields = {
   title: z.string().optional(),
@@ -161,7 +133,7 @@ const handoffFields = {
     .describe("Markdown list of skills (or MCP tools) the next agent should load, each with a short reason. Empty string clears it."),
   generatedBy: z.string().default("mcp:harness-bridge"),
   cwd: cwdArg,
-  cadence: z.enum(["checkpoint", "lazy", "aggressive"]).optional()
+  cadence: cadenceArg.optional()
 };
 
 export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
@@ -172,7 +144,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
     },
     {
       instructions:
-        "Use Harness Bridge tools to maintain .harness/bridge.md for serial AI coding-agent handoffs. The bridge file remains the source of truth. Reference existing artifacts (specs, ADRs, issues, PRs, commits) instead of copying them into the bridge, and never write secrets or personal data. After bridge_consume, restate the returned state, load any suggested skills, and wait for user confirmation before executing."
+        "Harness Bridge keeps .harness/bridge.md as the source of truth for serial coding-agent handoffs. Reference existing artifacts (specs, ADRs, issues, PRs) instead of copying them. After bridge_consume or session_recover, restate the state and wait for user confirmation before editing. To continue a session another provider could not finish (e.g. usage limit), use session_list → session_recover; they read local transcripts and never contact the source provider."
     }
   );
 
@@ -243,27 +215,31 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
       plan: z.string().optional().describe("Markdown checklist for the initial plan."),
       nextAction: z.string().optional().describe("Imperative next action."),
       generatedBy: z.string().default("mcp:harness-bridge"),
-      cadence: z.enum(["checkpoint", "lazy", "aggressive"]).default("checkpoint"),
+      cadence: cadenceArg.default("checkpoint"),
       cwd: cwdArg,
       localOnly: z
         .boolean()
         .default(false)
         .describe("Keep the bridge out of git by adding .harness/ to this clone's .git/info/exclude (no shared .gitignore change)."),
       installInstructionsFor: z
-        .enum(["claude-code", "codex", "gemini-cli", "cursor"])
+        .union([z.enum(RULES_TARGETS), z.array(z.enum(RULES_TARGETS))])
         .optional()
         .describe("Optional provider instruction file to update with the canonical maintainer snippet from prompts/maintainer.md.")
     },
     async ({ title, goal, plan, nextAction, generatedBy, cadence, cwd: requestedCwd, localOnly, installInstructionsFor }) => {
       const resolvedCwd = targetCwd(cwd, requestedCwd);
+      const existed = bridgeExists(resolvedCwd);
       const doc = initBridge({ cwd: resolvedCwd, title, goal, plan, nextAction, generatedBy, cadence });
-      const instructionResult = installInstructionsFor ? installProviderInstructions(resolvedCwd, installInstructionsFor) : "";
+      const targets = installInstructionsFor === undefined ? [] : Array.isArray(installInstructionsFor) ? installInstructionsFor : [installInstructionsFor];
+      const instructionResult = targets.map((target) => installMaintainerRules(resolvedCwd, target)).join("\n");
       const localOnlyResult = localOnly ? `Kept the bridge local-only via ${excludeBridgeFromGit(resolvedCwd)}.` : "";
       return textResponse(
         [
           instructionResult,
           localOnlyResult,
-          `Initialized bridge at ${bridgePath(resolvedCwd)} using the prompts/init.md schema and prompts/maintainer.md template.`,
+          existed
+            ? `Bridge already exists at ${bridgePath(resolvedCwd)}; left unchanged. Use bridge_checkpoint to update it.`
+            : `Initialized bridge at ${bridgePath(resolvedCwd)}.`,
           renderBridge(doc)
         ]
           .filter(Boolean)
@@ -322,7 +298,7 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
 
   server.tool(
     "bridge_recover",
-    "Assist recovery from transcript-derived content. This tool validates and writes agent-supplied recovered bridge content, or reports a redacted transcript excerpt in verify mode.",
+    "Validate and (with write:true, after user confirmation) write a bridge rebuilt from recovered evidence. Get the evidence from session_recover first; do not paste raw transcripts here.",
     {
       mode: z.enum(["full", "since", "verify"]),
       recoveredBridgeMarkdown: z
@@ -358,6 +334,78 @@ export function createHarnessBridgeServer(cwd = process.cwd()): McpServer {
       writeBridge(resolvedCwd, parseBridge(recoveredBridgeMarkdown));
       return jsonResponse({ written: true, path: bridgePath(resolvedCwd), validation });
     }
+  );
+
+  const providerArg = z.enum(["claude-code", "codex", "claude"]).optional().describe("Source provider. Omit to search Claude Code and Codex.");
+
+  server.tool(
+    "session_list",
+    "List recent Claude Code / Codex sessions recorded for this workspace (newest first) with title, last prompt and how each ended (e.g. usage-limit). Use it to let the user pick the session to recover.",
+    {
+      cwd: cwdArg,
+      provider: providerArg,
+      limit: z.number().int().min(1).max(50).default(10),
+      all: z.boolean().default(false).describe("Include sessions from other workspaces.")
+    },
+    async ({ cwd: requestedCwd, provider, limit, all }) => {
+      const resolvedCwd = targetCwd(cwd, requestedCwd);
+      const sessions = listSessions(resolvedCwd, { provider: parseProvider(provider), limit, all });
+      const recoveries = listRecoveryPackages(resolvedCwd).slice(0, 5);
+      return jsonResponse({
+        sessions: sessions.map(({ path: transcript, ...rest }) => ({ ...rest, transcript })),
+        previousRecoveries: recoveries,
+        note: "Ask the user which session to recover unless they named one. Never pick a session from another workspace silently."
+      });
+    }
+  );
+
+  server.tool(
+    "session_recover",
+    "Build a compact recovery package (goal, task state, files vs repo, commands, bridge staleness, limitations) from a session transcript without contacting the source provider. Requires an explicit session id or transcript path.",
+    {
+      session: z.string().describe("Session id from session_list, or a transcript .jsonl path under the provider's transcript directory."),
+      provider: providerArg,
+      cwd: cwdArg,
+      to: z.enum(["codex", "claude-code", "antigravity", "cursor"]).optional().describe("Destination provider, to include a ready-to-run continuation command."),
+      budgetChars: z.number().int().min(2000).max(40000).default(12000),
+      write: z.boolean().default(false).describe("Save the package to .harness/recovery/ (git-ignored). Set only when the user asked to save or hand off.")
+    },
+    async ({ session, provider, cwd: requestedCwd, to, budgetChars, write }) => {
+      const resolvedCwd = targetCwd(cwd, requestedCwd);
+      const pkg = buildRecoveryPackage({ cwd: resolvedCwd, session, provider: parseProvider(provider), to: to ? parseDestination(to) : undefined, budgetChars });
+      const written = write ? writeRecoveryPackage(resolvedCwd, pkg) : undefined;
+      const footer = [
+        written ? `Saved to ${written}.` : `Not saved (pass write:true to save as ${pkg.relativePath}).`,
+        pkg.continuation ? `Continue in ${pkg.continuation.name}: ${pkg.continuation.command}` : "",
+        "Next: verify task claims against the repo, restate goal / done / in progress / next action, and wait for user confirmation. Then write the bridge with bridge_recover (write:true) or bridge_checkpoint."
+      ].filter(Boolean);
+      return textResponse(`${pkg.markdown}\n\n---\n${footer.join("\n")}`);
+    }
+  );
+
+  server.tool(
+    "session_read",
+    "Read a bounded, redacted slice of a session transcript (by line range, around a line, or text search). Use only when the recovery package is missing a detail.",
+    {
+      session: z.string(),
+      provider: providerArg,
+      from: z.number().int().min(1).optional(),
+      to: z.number().int().min(1).optional(),
+      around: z.number().int().min(1).optional(),
+      radius: z.number().int().min(1).max(200).default(15),
+      grep: z.string().min(2).optional(),
+      includeToolOutput: z.boolean().default(false),
+      maxChars: z.number().int().min(500).max(40000).default(8000)
+    },
+    async (args) => textResponse(readTranscriptSlice({ ...args, provider: parseProvider(args.provider) }))
+  );
+
+  server.tool(
+    "session_destinations",
+    "List coding-agent CLIs installed on this machine that a recovered session can continue in.",
+    {},
+    async () =>
+      jsonResponse(detectDestinations().map(({ id, name, installed, binaryPath, launchVerified }) => ({ id, name, installed, binaryPath, launchVerified })))
   );
 
   return server;

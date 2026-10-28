@@ -1,20 +1,9 @@
 # Harness Bridge
 
-This workspace uses Harness Bridge for serial AI-agent handoff through `.harness/bridge.md`.
+This repo uses Harness Bridge: `.harness/bridge.md` holds the current task state so another agent or provider can continue the work.
 
-When the Harness Bridge MCP server is configured, use its tools instead of copy-pasting bridge prompts:
-
-- `bridge_status` before trusting existing bridge state.
-- `bridge_init` for first setup.
-- `bridge_checkpoint` after meaningful checkpoints.
-- `bridge_produce` before a deliberate handoff.
-- `bridge_consume` when resuming work.
-- `bridge_recover` when the bridge is stale, missing, or suspect.
-
-When calling a bridge tool from Cursor, pass the absolute workspace path as `cwd` whenever Cursor exposes it. After a write tool returns, report the returned absolute path; do not claim a handoff was saved unless the tool call succeeded.
-
-For `bridge_produce`, include the current session's handoff content in the tool arguments: updated `plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, or appended decisions as applicable. If the user said what the next session is for, pass it as `focus`. Link existing specs/ADRs/issues/PRs/commits in `references` instead of copying them, and list skills the next agent should load in `suggestedSkills`. Only set `confirmNoChanges` when you have reviewed the session and the existing bridge already contains the complete handoff.
-
-After `bridge_consume`, load any suggested skills, restate the current goal, completed work, discrepancies, and next action, then wait for explicit user confirmation before editing files.
-
-Keep `.harness/bridge.md` terse and free of secrets and personal data.
+- **Resuming:** call `bridge_consume`. Load any suggested skills, restate the goal, what is done and the next action, then wait for the user to confirm before editing.
+- **After a finished step, decision or batch of edits:** call `bridge_checkpoint` with only the fields that changed.
+- **Before switching agents:** call `bridge_produce` with the updated plan, next action and files touched. If the user said what the next session is for, pass it as `focus`. Link existing specs, issues and PRs in `references`, and list skills to load in `suggestedSkills`. Set `confirmNoChanges` only if the bridge is already complete.
+- **Previous session died (usage limit, crash):** call `session_list`, ask the user which session to use, then call `session_recover`. Restate and wait. For more detail use `session_read`; never load raw transcripts.
+- Pass the absolute workspace path as `cwd`. Report a write only after the tool call succeeds. Keep the bridge terse and free of secrets and personal data.

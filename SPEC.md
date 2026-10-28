@@ -155,6 +155,8 @@ A bridge can be regenerated from the producing session's transcript when missing
 
 Recovery output MUST be a normal `harness-bridge/v1` bridge with `generated_by: recovery-from-transcript` in frontmatter. Secret redaction (§5) applies equally to recovery output.
 
+*Additive (0.3):* tooling MAY write intermediate **recovery packages** (evidence extracted from a transcript, schema `harness-bridge-recovery/v1`) to `.harness/recovery/`. They are not bridges, MUST be redacted, and MUST be excluded from git (the directory carries its own `.gitignore`). Bridge consumers MUST ignore this directory.
+
 ## 9. Lifecycle
 
 | Stage | Prompt | Effect |

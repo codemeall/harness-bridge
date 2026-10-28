@@ -22,8 +22,12 @@ After setup, your agent can use these tools:
 | `bridge_checkpoint` | Updates the bridge after meaningful work. |
 | `bridge_produce` | Finalizes the bridge before switching sessions or agents. |
 | `bridge_consume` | Reads the bridge in a new session and returns the current state. |
-| `bridge_recover` | Helps recover a stale or missing bridge from transcript evidence. |
+| `bridge_recover` | Validates and (after confirmation) writes a bridge rebuilt from recovered evidence. |
 | `bridge_validate` | Validates bridge markdown against the schema. |
+| `session_list` | Lists recent Claude Code / Codex sessions for this workspace, including how each ended (e.g. `usage-limit`). |
+| `session_recover` | Builds a compact recovery package from a session transcript, without contacting the source provider. |
+| `session_read` | Bounded, redacted transcript slice by line range, around a line, or text search. |
+| `session_destinations` | Lists installed coding-agent CLIs that a recovered session can continue in. |
 
 All bridge tools accept an optional `cwd` argument. Agents should pass the absolute workspace path when the MCP client exposes it, especially in editors that can start stdio MCP servers from a different process directory than the project. Write tools return the absolute `.harness/bridge.md` path they updated.
 
@@ -60,10 +64,10 @@ The server also exposes these prompt resources for agents that want the canonica
 
 ### Option A: npm package
 
-Use this when `@codemeall/harness-bridge` is available from npm:
+Use this when `@codemeall/harness-bridge@latest` is available from npm:
 
 ```bash
-npx -y @codemeall/harness-bridge mcp
+npx -y @codemeall/harness-bridge@latest mcp
 ```
 
 You normally do not run this command by hand. Add it to your agent's MCP config and the agent starts it when needed.
@@ -101,7 +105,7 @@ Replace `/absolute/path/to/harness-bridge` with the real path to your clone.
 With npm:
 
 ```bash
-claude mcp add --transport stdio harness-bridge -- npx -y @codemeall/harness-bridge mcp
+claude mcp add --transport stdio harness-bridge -- npx -y @codemeall/harness-bridge@latest mcp
 ```
 
 With a Git checkout:
@@ -130,7 +134,7 @@ With npm:
   "mcpServers": {
     "harness-bridge": {
       "command": "npx",
-      "args": ["-y", "@codemeall/harness-bridge", "mcp"]
+      "args": ["-y", "@codemeall/harness-bridge@latest", "mcp"]
     }
   }
 }
@@ -165,7 +169,7 @@ With npm:
 ```toml
 [mcp_servers.harness-bridge]
 command = "npx"
-args = ["-y", "@codemeall/harness-bridge", "mcp"]
+args = ["-y", "@codemeall/harness-bridge@latest", "mcp"]
 ```
 
 With a Git checkout:
@@ -193,7 +197,7 @@ With npm:
   "mcpServers": {
     "harness-bridge": {
       "command": "npx",
-      "args": ["-y", "@codemeall/harness-bridge", "mcp"]
+      "args": ["-y", "@codemeall/harness-bridge@latest", "mcp"]
     }
   }
 }
@@ -220,7 +224,7 @@ cat /absolute/path/to/harness-bridge/templates/gemini/GEMINI.md.snippet >> GEMIN
 
 ### Antigravity
 
-Merge this into Antigravity's MCP settings.
+Merge this into `~/.gemini/config/mcp_config.json` (global) or `.agents/mcp_config.json` (workspace). Alternatively, run `agy mcp add harness-bridge npx -y @codemeall/harness-bridge@latest mcp`.
 
 With npm:
 
@@ -229,7 +233,7 @@ With npm:
   "mcpServers": {
     "harness-bridge": {
       "command": "npx",
-      "args": ["-y", "@codemeall/harness-bridge", "mcp"]
+      "args": ["-y", "@codemeall/harness-bridge@latest", "mcp"]
     }
   }
 }
@@ -248,7 +252,26 @@ With a Git checkout:
 }
 ```
 
-Use the same project-instruction pattern as Gemini: the agent should use Harness Bridge MCP tools for bridge work and must wait for user confirmation after `bridge_consume`.
+Append `templates/antigravity/AGENTS.md.snippet` to `AGENTS.md`, which Antigravity loads automatically. To add the skills, run `harness-bridge install-skills --agent antigravity` (app/IDE) or `--agent antigravity-cli` (`agy`). See [`providers/antigravity.md`](../providers/antigravity.md).
+
+### OpenCode
+
+Add this to `opencode.json` at the project root, or to `~/.config/opencode/opencode.json` for every project ([docs](https://opencode.ai/docs/mcp-servers/)). It's the same as `templates/opencode/opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "harness-bridge": {
+      "type": "local",
+      "command": ["npx", "-y", "@codemeall/harness-bridge@latest", "mcp"],
+      "enabled": true
+    }
+  }
+}
+```
+
+OpenCode loads `AGENTS.md`, so the Codex snippet (`templates/codex/AGENTS.md.snippet`) works unchanged. Install the skills with `harness-bridge install-skills --agent opencode`.
 
 ## Start using it
 
@@ -347,15 +370,14 @@ node /absolute/path/to/harness-bridge/dist/cli.js consume
 
 ## Recovery
 
-Use `bridge_recover` when `.harness/bridge.md` is missing, stale, or suspect.
+Use recovery when a session ended before it handed off (usage limit, crash), or when `.harness/bridge.md` is missing or stale.
 
-Recovery still requires agent judgment because transcripts differ by provider. The MCP tool validates and writes recovered bridge markdown, but the agent must synthesize that markdown from transcript evidence and get your confirmation before writing.
+1. `session_list`: the user picks the session.
+2. `session_recover` with `session` and `to` set to your provider: a deterministic package (goal, task state, files vs git, commands, bridge staleness, limitations), redacted and budgeted to about 12k characters. Pass `write: true` to save it under `.harness/recovery/`, which is git-ignored.
+3. If a detail is missing, `session_read` around the line numbers the package cites.
+4. Restate and wait for confirmation. Then write the bridge with `bridge_recover` (`mode: "full"`, `write: true`) or top it up with `bridge_checkpoint`.
 
-Modes:
-
-- `verify` — read-only discrepancy report.
-- `since` — top up a stale bridge from transcript evidence.
-- `full` — rebuild a missing bridge.
+CLI equivalents: `harness-bridge sessions`, `harness-bridge recover <id> --to codex [--launch]`, `harness-bridge transcript <id> --around <line>`, and `harness-bridge resume <id>` (native, same provider). Full design: [`architecture.md`](./architecture.md).
 
 ## Safety rules
 
@@ -370,9 +392,10 @@ Modes:
 
 | Symptom | Fix |
 |---|---|
-| Agent cannot see Harness Bridge tools | Confirm the MCP config points to `npx -y @codemeall/harness-bridge mcp` or `node /absolute/path/to/harness-bridge/dist/cli.js mcp`, then restart the agent/editor. |
+| Agent cannot see Harness Bridge tools | Confirm the MCP config points to `npx -y @codemeall/harness-bridge@latest mcp` or `node /absolute/path/to/harness-bridge/dist/cli.js mcp`, then restart the agent/editor. |
 | Git-checkout command cannot find `dist/cli.js` | Run `npm install` and `npm run build` in the Harness Bridge clone. |
 | `npx` fails with cache permission errors | Fix the local npm cache ownership or use the Git-checkout setup. |
 | `bridge_status` says `head` or `dirty` differs | Read the discrepancy before acting; the bridge may be stale or the repo may have new uncommitted work. |
-| Cursor recovery cannot find transcript | Export/copy the Cursor chat manually and provide it to the agent for recovery. |
+| `session_list` shows nothing | Run the agent from the project repo (or pass `cwd`); use `all: true` / `--all` to see other workspaces. Only Claude Code and Codex transcripts are parsed. |
+| Cursor or Antigravity session needs recovery | Their transcripts aren't parseable; rely on the bridge, or resume natively (`agy --conversation <uuid>`). |
 | Bridge grows too long | Move durable rationale to docs or a long-lived knowledge base; keep only goal, plan, next action, decisions, questions, and files touched. |

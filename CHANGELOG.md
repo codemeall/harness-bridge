@@ -4,6 +4,56 @@ All notable changes to Harness Bridge are documented here. The project adheres t
 
 ## [Unreleased]
 
+## [0.4.0]
+
+### Added
+- **Cross-provider session recovery.** Recovery works from local transcripts and never contacts the source provider, so it works while that provider is out of quota.
+  - New MCP tools: `session_list`, `session_recover`, `session_read`, `session_destinations`.
+  - New CLI commands: `sessions`, `recover`, `transcript`, `resume`, `destinations`.
+  - Adapters for Claude Code (`~/.claude/projects`) and Codex (`~/.codex/sessions`, both rollout layouts).
+  - Detects why a session stopped: usage limit, auth error, interrupted, mid tool call.
+  - Rebuilds task state from TodoWrite / TaskCreate / TaskUpdate / update_plan.
+  - Checks written files against `git status` and the commits made since the session started.
+  - Reports bridge staleness, follows `continued-in` chains, and keeps output to a budget.
+- **Recovery packages** in `.harness/recovery/`. They are git-ignored, written only on request, and their frontmatter serves as the recovery history.
+- **Destinations:** Codex (`codex -C`), Claude Code, Antigravity CLI (`agy -i`), Cursor Agent. Each shows a verified command, and `--launch` runs it on a TTY.
+- **`recover-session` skill** (`/recover-session`), bundled with `handoff`, `pickup` and `harness-bridge` in every install path, including the Claude Code plugin.
+- **Antigravity:** provider notes, `installInstructionsFor: "antigravity"` (writes `AGENTS.md`), and `templates/antigravity/AGENTS.md.snippet`.
+- **Maintainer rules in one step:**
+  - `installInstructionsFor` now accepts a list, so one `bridge_init` call covers several rules files.
+  - New `harness-bridge init --rules <target>` (repeatable) does the same from the CLI.
+- **CLI help everywhere:** `<command> --help` now prints usage.
+  - `transcript` takes line ranges as `--from N --until N`.
+- **Skill installer upgrades:**
+  - `install-skills` now updates copies it installed earlier (including untouched 0.3.0 copies). Copies you edited, copies owned by another installer such as `npx skills`, and other authors' skills are still left alone unless you pass `--force`.
+  - New `skills-status` command shows each skill as current, outdated, modified, external or missing, and exits 1 when an update is due.
+  - New agent targets: `opencode`, `antigravity` (app/IDE) and `antigravity-cli`. Aliases `claude`, `chatgpt` and `agy` work too.
+  - `--agent` is repeatable. When omitted, every agent detected on the machine is targeted.
+- **New docs:** `docs/audit.md`, `docs/architecture.md` (including the T3 Code comparison).
+
+### Fixed
+- `.harness/` no longer counts as uncommitted work. Before this fix, every newly written bridge reported a false `dirty` discrepancy.
+- **Secret detection:**
+  - Now catches Anthropic, GitHub, AWS, Slack, Stripe and Google keys, JWTs, PEM private keys, Bearer headers and URL credentials.
+  - Stops rejecting harmless text such as `max_tokens: 100`.
+  - One shared pattern table (`src/core/secrets.ts`) now serves both refusal and redaction.
+- `bridge_consume` / `bridge_status` cap inlined diffs: 2k characters per file, 6k total.
+- A `cwd` that doesn't exist is now rejected instead of being created.
+- `bridge_init` reports an existing bridge instead of claiming it initialized it.
+- CRLF bridges now parse.
+- The CLI uses `parseArgs` (supports `--flag=value` and `--help`) and gives readable errors.
+
+### Changed
+- `bridge_recover` description now points to `session_recover` for evidence. Its arguments and behaviour are unchanged.
+- The maintainer snippet is about 23% shorter. Its header and template are unchanged.
+- The provider snippets now share one body and gained the recovery route. A test keeps them in sync.
+- `prompts/recover.md` uses the deterministic engine, with a manual fallback.
+- `install-skills --agent codex` now installs to `~/.agents/skills`, the path the current Codex docs use (also read by the ChatGPT desktop app), instead of `~/.codex/skills`.
+- `templates/antigravity/settings.json` was renamed to `templates/antigravity/mcp_config.json`, matching Antigravity's file name.
+- Gemini CLI is marked legacy. Google moved individual users to Antigravity CLI on 2026-06-18.
+- Docs no longer claim unmeasured "6/6" recovery support.
+- `npm test` now builds first, because the CLI tests run `dist/cli.js`.
+
 ## [0.3.0]
 
 ### Added
