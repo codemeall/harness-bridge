@@ -1,8 +1,8 @@
 {
   "name": "harness-bridge",
   "displayName": "Harness Bridge",
-  "version": "0.3.0",
-  "description": "Hand off AI coding sessions through .harness/bridge.md: /handoff to finalize, /pickup to resume, plus MCP tools that validate and ground the bridge in git.",
+  "version": "0.4.0",
+  "description": "Hand off AI coding sessions through .harness/bridge.md: /handoff to finalize, /pickup to resume, /recover-session to continue a session that hit a usage limit or crashed, plus MCP tools that validate and ground the bridge in git.",
   "author": {
     "name": "codemeall",
     "url": "https://github.com/codemeall"
@@ -10,11 +10,22 @@
   "homepage": "https://github.com/codemeall/harness-bridge",
   "repository": "https://github.com/codemeall/harness-bridge",
   "license": "MIT",
-  "keywords": ["handoff", "context", "session", "resume", "mcp", "skills"],
+  "keywords": [
+    "handoff",
+    "context",
+    "session",
+    "resume",
+    "mcp",
+    "skills"
+  ],
   "mcpServers": {
     "harness-bridge": {
       "command": "npx",
-      "args": ["-y", "@codemeall/harness-bridge@latest", "mcp"]
+      "args": [
+        "-y",
+        "@codemeall/harness-bridge@latest",
+        "mcp"
+      ]
     }
   }
 }

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { BRIDGE_RELATIVE_PATH } from "../src/core/bridge.js";
 import { PACKAGE_VERSION } from "../src/core/version.js";
 import { createHarnessBridgeServer } from "../src/mcp/server.js";
+import { ClaudeTranscript, createSandbox, setClock } from "./fixtures/transcripts.js";
 
 let serverCwd: string;
 let targetCwd: string;
@@ -181,6 +182,28 @@ describe("mcp server", () => {
     await server.close();
   });
 
+  it("keeps every v0.2 tool and adds the session tools (Scenario I)", async () => {
+    const { client, server } = await connectClient();
+    const names = (await client.listTools()).tools.map((tool) => tool.name);
+    for (const name of ["bridge_status", "bridge_validate", "bridge_init", "bridge_checkpoint", "bridge_produce", "bridge_consume", "bridge_recover"]) {
+      expect(names).toContain(name);
+    }
+    for (const name of ["session_list", "session_recover", "session_read", "session_destinations"]) expect(names).toContain(name);
+    const prompts = (await client.listPrompts()).prompts.map((prompt) => prompt.name);
+    expect(prompts).toContain("bridge_recover_prompt");
+    await client.close();
+    await server.close();
+  });
+
+  it("reports an existing bridge instead of claiming to initialize it", async () => {
+    const { client, server } = await connectClient();
+    await initTargetBridge(client);
+    const again = textContent(await initTargetBridge(client));
+    expect(again).toContain("already exists");
+    await client.close();
+    await server.close();
+  });
+
   it("keeps the bridge out of git when bridge_init is called with localOnly", async () => {
     const { client, server } = await connectClient();
     const result = await client.callTool({
@@ -193,6 +216,78 @@ describe("mcp server", () => {
 
     await client.close();
     await server.close();
+  });
+
+  it("installs maintainer rules for several providers in one bridge_init call, idempotently", async () => {
+    const { client, server } = await connectClient();
+    const args = { cwd: targetCwd, title: "Rules", goal: "Install rules.", installInstructionsFor: ["claude-code", "codex"] };
+    await client.callTool({ name: "bridge_init", arguments: args });
+    const again = textContent(await client.callTool({ name: "bridge_init", arguments: args }));
+    expect(again).toContain("already contains Harness Bridge instructions");
+    for (const file of ["CLAUDE.md", "AGENTS.md"]) {
+      const text = fs.readFileSync(path.join(targetCwd, file), "utf8");
+      expect(text.match(/## Harness Bridge — keep \.harness\/bridge\.md current/g)).toHaveLength(1);
+    }
+    const single = await client.callTool({ name: "bridge_init", arguments: { ...args, installInstructionsFor: "cursor" } });
+    expect(single.isError).not.toBe(true);
+    expect(fs.existsSync(path.join(targetCwd, ".cursor/rules/harness-bridge.md"))).toBe(true);
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects a cwd that does not exist", async () => {
+    const { client, server } = await connectClient();
+    const result = await client.callTool({ name: "bridge_status", arguments: { cwd: path.join(targetCwd, "missing") } });
+    expect(result.isError).toBe(true);
+    expect(textContent(result)).toContain("does not exist");
+    await client.close();
+    await server.close();
+  });
+
+  it("still validates and writes agent-supplied recovered bridges via bridge_recover", async () => {
+    const { client, server } = await connectClient();
+    await initTargetBridge(client);
+    const markdown = fs.readFileSync(path.join(targetCwd, BRIDGE_RELATIVE_PATH), "utf8").replace("Run the next MCP assertion.", "Recovered next action.");
+    const preview = JSON.parse(textContent(await client.callTool({ name: "bridge_recover", arguments: { cwd: targetCwd, mode: "since", recoveredBridgeMarkdown: markdown } })));
+    expect(preview.written).toBe(false);
+    const written = JSON.parse(textContent(await client.callTool({ name: "bridge_recover", arguments: { cwd: targetCwd, mode: "since", recoveredBridgeMarkdown: markdown, write: true } })));
+    expect(written.written).toBe(true);
+    expect(fs.readFileSync(path.join(targetCwd, BRIDGE_RELATIVE_PATH), "utf8")).toContain("Recovered next action.");
+    await client.close();
+    await server.close();
+  });
+
+  it("lists, recovers and reads a session through MCP", async () => {
+    setClock("2026-10-27T10:00:00Z");
+    const sb = createSandbox();
+    try {
+      const t = new ClaudeTranscript(sb.workspace).user("Add CSV import to the dashboard").taskCreate("1", "Parse CSV").usageLimit();
+      t.write(sb.claudeHome);
+      const { client, server } = await connectClient(sb.workspace);
+
+      const list = JSON.parse(textContent(await client.callTool({ name: "session_list", arguments: { cwd: sb.workspace } })));
+      expect(list.sessions).toHaveLength(1);
+      expect(list.sessions[0]).toMatchObject({ id: t.id, endState: "usage-limit", workspaceMatch: "exact" });
+
+      const missing = await client.callTool({ name: "session_recover", arguments: { cwd: sb.workspace } });
+      expect(missing.isError).toBe(true);
+
+      const recovered = textContent(await client.callTool({ name: "session_recover", arguments: { cwd: sb.workspace, session: t.id, to: "codex", write: true } }));
+      expect(recovered).toContain("Add CSV import");
+      expect(recovered).toContain("Continue in Codex");
+      expect(fs.existsSync(path.join(sb.workspace, ".harness/recovery", `claude-code-${t.id.slice(0, 8)}.md`))).toBe(true);
+      expect(fs.existsSync(path.join(sb.workspace, BRIDGE_RELATIVE_PATH))).toBe(false);
+
+      const slice = textContent(await client.callTool({ name: "session_read", arguments: { session: t.id, grep: "CSV" } }));
+      expect(slice).toContain("[user] Add CSV import");
+
+      const history = JSON.parse(textContent(await client.callTool({ name: "session_list", arguments: { cwd: sb.workspace } })));
+      expect(history.previousRecoveries[0].session).toBe(t.id);
+      await client.close();
+      await server.close();
+    } finally {
+      sb.cleanup();
+    }
   });
 });
 

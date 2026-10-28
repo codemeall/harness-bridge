@@ -14,7 +14,7 @@ Extra context from the user, if any: $ARGUMENTS
 
 1. **Load the bridge.**
    - **MCP available:** call `bridge_consume` with `cwd` set to the absolute workspace path. It returns the bridge content, git discrepancies, commits since the bridge's `head`, and per-file diffs.
-   - **No MCP:** read `.harness/bridge.md` at the repo root. If it doesn't exist, stop and tell the user. They may want to recover it from the old transcript (see the `harness-bridge` skill) or start fresh.
+   - **No MCP:** read `.harness/bridge.md` at the repo root. If it doesn't exist, stop and tell the user. If the previous session died before handing off (usage limit, crash), offer `/recover-session`; otherwise they can start fresh.
 
 2. **Check it against the repo.** Don't silently reconcile; list every mismatch.
    - `branch`: if it differs from the current branch, ask whether to switch or stay.

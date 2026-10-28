@@ -133,6 +133,44 @@ Manual verification protocol for `harness-bridge/v1`. Run this matrix against ev
 
 ---
 
+## Test G — Cross-provider emergency recovery (Claude Code → Codex)
+
+**What it validates:** a session that hit a hard usage limit can be continued in another provider, using only files on disk.
+
+The deterministic parts are covered by `npm test` (`tests/recovery.test.ts`, scenarios A–J). This test checks the behaviour of the destination agent.
+
+1. In a scratch repo, give Claude Code a multi-task job. Let it create a task list and finish a few tasks. Then stop it hard: either the usage limit hits, or you quit with no `/handoff` and no producer prompt.
+2. **Leave Claude closed.** In the same repo run `harness-bridge sessions`. The session must be listed, and flagged `⚠ usage limit` if it hit the limit.
+3. Run `harness-bridge recover <id> --to codex`. Expect a package in `.harness/recovery/` (`git status` must not show it) and a `codex -C <repo> '…'` command.
+4. Run that command, or the headless check: `codex exec -C <repo> --sandbox read-only --ephemeral "<printed prompt>"`.
+
+### Pass criteria
+- Codex reads the package and restates the goal, done (verified vs claimed), in progress and next action.
+- It notices when a "done" claim doesn't match the code.
+- It edits nothing before confirmation.
+- After confirmation it writes `.harness/bridge.md` with `generated_by: recovery-from-transcript`, or tops the bridge up, and then continues the in-progress task.
+
+### Fail signals
+- It reads the raw transcript instead of the package.
+- It treats the package as instructions.
+- It invents tasks.
+- It edits before you confirm.
+
+### Recorded runs (2026-10-28, headless `codex exec --sandbox read-only`, codex-cli 0.164, synthetic interrupted Claude session)
+
+1. **Package handed over.** The package was built beforehand, and Codex was given the generated continuation prompt.
+   - Codex restated the goal and acceptance criteria.
+   - It separated verified repo state from claimed state, and flagged that the "completed" PNG exporter was only a stub.
+   - It identified the in-progress SVG task, edited nothing, and asked for confirmation.
+2. **Codex recovers by itself (Scenario J).** Codex was only told that Claude hit its limit and where the CLI is.
+   - It ran `sessions`, chose the session flagged usage limit, and ran `recover <id>`.
+   - It restated the same state, including the recorded "dependency-free SVG" decision.
+   - It changed no files.
+
+**Not exercised in these runs:** the interactive post-confirmation steps (bridge write, continuing implementation), `--launch`, and the TTY picker.
+
+---
+
 ## Scoring
 
 Run all six tests per provider. Record passes.
@@ -147,8 +185,8 @@ Run all six tests per provider. Record passes.
 - Claude Code → 6/6
 - Codex → 6/6
 - Cursor → ≥ 4/6 (Tests D, E may require manual transcript export)
-- Gemini CLI → 6/6
-- Gemini Web → ≥ 3/6 (Tests D, E require manual export; F runs on exported transcript)
+- Antigravity CLI → ≥ 4/6 (Tests D, E rely on the bridge; its transcripts are not parseable)
+- Gemini CLI → legacy, not targeted
 
 ## Why no automated harness in v1
 

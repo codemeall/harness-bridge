@@ -1,6 +1,6 @@
 ---
 name: harness-bridge
-description: Set up and maintain Harness Bridge handoff state (.harness/bridge.md) so AI coding sessions survive token limits, crashes, and switching agents. Use when the user asks to initialize Harness Bridge, checkpoint or update the bridge, recover or verify a bridge from a transcript, validate it, or remove it; and to keep an existing bridge current while working. For a deliberate end-of-session handoff use /handoff; to resume use /pickup.
+description: Set up and maintain Harness Bridge handoff state (.harness/bridge.md) so AI coding sessions survive token limits, crashes, and switching agents. Use when the user asks to initialize Harness Bridge, checkpoint or update the bridge, recover or verify a bridge from a transcript, validate it, or remove it; and to keep an existing bridge current while working. For a deliberate end-of-session handoff use /handoff; to resume use /pickup; to continue a session that died (usage limit, crash) use /recover-session.
 ---
 
 # Harness Bridge
@@ -10,6 +10,7 @@ description: Set up and maintain Harness Bridge handoff state (.harness/bridge.m
 Companion skills:
 - `/handoff [what the next session is for]`: finalize the bridge before ending a session.
 - `/pickup`: resume from the bridge in a new session.
+- `/recover-session`: continue a session that ended without a handoff, rebuilt from its local transcript.
 
 If the `harness-bridge` MCP server is connected, prefer its tools and pass the absolute workspace path as `cwd`. Otherwise edit the file directly; the rules are the same.
 
@@ -18,7 +19,11 @@ If the `harness-bridge` MCP server is connected, prefer its tools and pass the a
 Only for tasks longer than ~3 steps. Ask for a one-line title and a 2–4 sentence goal if you don't have them.
 
 - **MCP:** `bridge_init` with `title`, `goal`, optional `plan` and `nextAction`.
-  - `installInstructionsFor: claude-code | codex | gemini-cli | cursor` adds the maintainer rules to `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, or `.cursor/rules/harness-bridge.md`, so every future session keeps the bridge current without this skill.
+  - `installInstructionsFor` adds the maintainer rules, so every future session keeps the bridge current without this skill. Pass one value or a list, e.g. `["claude-code", "codex"]`:
+    - `claude-code` → `CLAUDE.md`
+    - `codex` or `antigravity` → `AGENTS.md`
+    - `gemini-cli` → `GEMINI.md`
+    - `cursor` → `.cursor/rules/harness-bridge.md`
   - `localOnly: true` keeps the bridge out of git (adds `/.harness/` to `.git/info/exclude`). Use it when the user doesn't want handoff notes in commits or PRs.
 - **No MCP:** create `.harness/bridge.md` from [template.md](template.md) and fill the frontmatter from git. For local-only mode, append `/.harness/` to `.git/info/exclude`.
 

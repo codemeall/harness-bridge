@@ -1,7 +1,7 @@
 {
   "name": "@codemeall/harness-bridge",
-  "version": "0.3.0",
-  "description": "Hand off AI coding-agent sessions through one markdown file: /handoff and /pickup skills plus a local MCP server.",
+  "version": "0.4.0",
+  "description": "Hand off AI coding-agent sessions through one markdown file, and recover sessions another agent could not finish: /handoff, /pickup and /recover-session skills plus a local CLI and MCP server.",
   "type": "module",
   "bin": {
     "harness-bridge": "dist/cli.js"
@@ -19,7 +19,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run",
+    "test": "npm run build && vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -45,7 +45,10 @@
     "cursor",
     "gemini",
     "mcp",
-    "skills"
+    "skills",
+    "antigravity",
+    "opencode",
+    "session-recovery"
   ],
   "repository": {
     "type": "git",

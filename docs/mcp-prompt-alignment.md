@@ -19,12 +19,13 @@ The MCP server should not parse natural-language prompts as its execution engine
 | `prompts/maintainer.md` | `bridge_checkpoint`, `bridge_produce`, prompt/resource exposure | Checkpoint updates preserve unknown frontmatter, append decisions, bump git state, validate schema, and refuse credential-shaped content. Cadence judgment still belongs to the agent. |
 | `prompts/producer.md` · `skills/handoff` | `bridge_produce` | Performs the mechanical final write. The agent still reviews session history, sharpens `Next action`, and decides what changed since `last_updated`; the tool rejects empty no-op produce calls unless `confirmNoChanges` is explicit. Optional `focus`, `references`, and `suggestedSkills` map to the producer's next-session, reference, and skill steps. |
 | `prompts/consumer.md` · `skills/pickup` | `bridge_consume`, `bridge_status` | Reads bridge state, compares git state, includes git-log/file grounding, and returns the explicit confirmation gate. Also surfaces decisions, open questions, focus, references, and suggested skills. The agent must restate and wait before editing. |
-| `prompts/recover.md` | `bridge_recover` plus prompt/resource exposure | Validates and writes recovered bridge markdown after confirmation. Transcript interpretation remains agent work because provider transcript formats differ. |
+| `prompts/recover.md` · `skills/recover-session` | `session_list`, `session_recover`, `session_read`, `bridge_recover` | Discovery, parsing, task reconstruction, repo verification, staleness and redaction are code. The agent picks the session with the user, judges claims, restates, and writes the bridge after confirmation. |
 | `prompts/uninstall.md` | prompt/resource exposure only | Full uninstall is still prompt/manual for now; no destructive MCP uninstall tool exists yet. |
 
 ## Current limitations
 
-- `bridge_recover` does not automatically locate and parse provider transcripts. It supports validated writes from agent-synthesized recovered markdown.
+- Automatic transcript parsing covers Claude Code and Codex only. Cursor and Antigravity transcripts are not readable, so recovery there relies on the bridge or a manual export.
+- `bridge_recover` still writes agent-synthesized markdown. The package gives evidence; deciding the final Plan/Next action stays with the agent and the user.
 - `bridge_produce` cannot know what happened verbally since `last_updated`; the agent must provide the updated plan, decisions, files, and next action. It fails on an empty call unless the agent sets `confirmNoChanges` after verifying the bridge is already current.
 - `bridge_checkpoint` does not decide cadence on its own; the agent decides when a checkpoint is meaningful.
 - MCP server process cwd can differ from the editor workspace in some clients, so bridge tools accept optional `cwd`; agents should pass the absolute workspace path when available.

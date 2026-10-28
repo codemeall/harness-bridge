@@ -8,48 +8,40 @@ Copy everything between the `--- begin snippet ---` and `--- end snippet ---` ma
 
 ## Harness Bridge — keep .harness/bridge.md current
 
-You are working in a repo that uses **Harness Bridge** for cross-session continuity. There is (or should be) a file at `.harness/bridge.md` following the `harness-bridge/v1` schema. Your job is to keep it accurate so a different agent — or a fresh session — can pick up exactly where you left off.
+This repo uses **Harness Bridge**. `.harness/bridge.md` (schema `harness-bridge/v1`) holds the current task state so a fresh session or a different agent can continue exactly where you stopped. Keep it accurate.
 
 ### Rules
 
-1. **Initialize on first non-trivial action.** If `.harness/bridge.md` does not exist and the task is more than ~3 steps, create it from the template at the bottom of this section before doing real work.
+1. **Create it before real work.** If the bridge is missing and the task is more than ~3 steps, create it from the template below, or with `bridge_init` over MCP.
+2. **Update at checkpoints only:**
+   - a plan item finishes;
+   - a decision is made;
+   - a batch of edits lands;
+   - before a long-running operation;
+   - the user says "checkpoint".
 
-2. **Update at checkpoints, not every turn.** Update the bridge after any of:
-   - Completing a checklist item.
-   - Making a decision worth recording (architecture, library choice, trade-off).
-   - Finishing a batch of file edits.
-   - Before any long-running operation (migrations, large refactors, builds you'd hate to redo).
-   - When the user explicitly says "checkpoint" or "update the bridge."
+   Skip read-only exploration and trivial edits.
+3. **Patch, don't rewrite.** Change only the affected sections and bump `last_updated`. Over MCP, use `bridge_checkpoint`.
+4. **Decisions are append-only.** To change one, add a new entry that names the entry it supersedes.
+5. **Stay terse; reference, don't duplicate.** A 10-minute task needs about 30 lines.
+   - Link specs, plans, ADRs, issues, PRs and commits under an optional `## References` section (after *Files touched*) instead of copying them.
+   - *Files touched* records each file's state, not its diff.
+6. **No secrets or personal data.** Never write keys, tokens, passwords, `.env` values, credentialed URLs, emails or customer data. Say where a value lives instead.
+7. **Don't commit** on the user's behalf.
+8. **Hand off with content.**
+   - On "Produce a Harness Bridge handoff" or `/handoff`, send the changed fields to `bridge_produce`: `plan`, `nextAction`, `filesTouched`, `openQuestions`, decisions, and, when useful, `focus`, `references` and `suggestedSkills`.
+   - Use `confirmNoChanges` only if the bridge is already complete.
+   - The optional sections are `## Next session focus` (after *Goal*), `## References` and `## Suggested skills` (after *Files touched*). Leave them out when empty.
+9. **Recover, don't guess.** If the previous session died without a handoff (usage limit, crash), list its sessions (`session_list`, `harness-bridge sessions` or `/recover-session`), let the user pick one, and recover it with `session_recover`.
+10. **Over MCP, pass the absolute workspace path as `cwd`.** Report a write only after the tool call succeeds.
 
-   Do **not** update on every assistant turn, after read-only exploration, or for trivial edits.
+### Cadence
 
-3. **Patch, don't rewrite.** Use the `Edit` tool (or equivalent) to change only the affected section. Bump the `last_updated` frontmatter field every time you patch.
+The default is **checkpoint**. Follow plain-language overrides:
+- "Use lazy cadence": update only when asked.
+- "Use aggressive cadence": update after every turn.
 
-4. **Append-only for decisions.** Never silently revise a past decision in *Decisions & rationale*. Add a new entry that supersedes the old, and reference the old one explicitly.
-
-5. **Stay terse.** A 10-minute task → a ~30-line bridge. The bridge is a reference card, not a journal.
-
-6. **Reference, don't duplicate.** If context already lives in a spec, plan, ADR, issue, PR, commit, or doc, link its path or URL in an optional `## References` section (after *Files touched*) instead of copying it. *Files touched* records each file's state, not its diff.
-
-7. **Redact secrets and personal data.** Never write API keys, tokens, passwords, `.env*` values, credentialed URLs, or personal data (emails, phone numbers, customer records) into the bridge. Say where a value lives instead.
-
-8. **Don't commit on the user's behalf.** Stage edits to `.harness/bridge.md`; let the user commit.
-
-9. **Verify bridge tool writes.** When using MCP, pass the absolute workspace path as `cwd` when available and report the returned `.harness/bridge.md` path after write tools. Never say a handoff was produced unless the tool call succeeded.
-
-10. **Producer handoffs need content.** On "Produce a Harness Bridge handoff" (or `/handoff`), review the session and pass the updated handoff fields to `bridge_produce` (`plan`, `nextAction`, `filesTouched`, `openQuestions`, `notes`, appended decisions, and when useful `focus`, `references`, `suggestedSkills`). If nothing changed since the previous checkpoint, set `confirmNoChanges` only after verifying the existing bridge is already complete.
-
-11. **Optional handoff sections.** When handing off, you may add `## Next session focus` (after *Goal*: what the next session is for), `## References` (after *Files touched*), and `## Suggested skills` (after *References*: skills the next agent should load, one reason each). Leave them out when empty.
-
-### Cadence override
-
-This repo uses cadence: **checkpoint** (default).
-
-The user can override per-task in plain language:
-- "Use lazy cadence for this exploration" → minimal updates, only on explicit request.
-- "Use aggressive cadence — this is critical" → update after every turn.
-
-When you change cadence, update the `cadence` field in the bridge frontmatter accordingly.
+When the cadence changes, update the `cadence` frontmatter field to match.
 
 ### Bridge template
 
